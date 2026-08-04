@@ -1,0 +1,293 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMINISTRATEUR
+  CAISSIER
+  AGENT
+}
+
+enum DocumentType {
+  ACHAT
+  BON_PREPARATION
+  VENTE
+  FACTURE
+  PROFORMA
+  RETOUR_CLIENT
+  RETOUR_FOURNISSEUR
+  REGULE_PLUS
+  REGULE_MOINS
+  TRANSFERT
+}
+
+enum DocumentStatus {
+  OUVERT
+  VALIDE
+  ANNULE
+}
+
+enum PaymentMode {
+  ESPECE
+  CHEQUE
+  TRAITE
+  VIREMENT
+}
+
+enum CashTxType {
+  RECETTE
+  DEPENSE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  role         UserRole @default(ADMINISTRATEUR)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Livreur {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  name      String
+  phone     String?
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  documents Document[]
+}
+
+model Zone {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  partners  Partner[]
+}
+
+model ChargeClass {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  label     String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  charges   Charge[]
+}
+
+model TypeReglement {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  label     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Depot {
+  id            String         @id @default(uuid())
+  code          String         @unique
+  name          String
+  isDefault     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  stocks        ArticleStock[]
+  lines         DocumentLine[]
+  documents     Document[]     @relation("DocumentSourceDepot")
+  destDocuments Document[]     @relation("DocumentDestDepot")
+}
+
+/// Partner categories are admin-defined (not a fixed enum) so the business can add
+/// its own tiers (e.g. "Grossiste Nord", "Pharmacies Réseau Sud") from the UI.
+/// `isSupplier` decides whether a partner in this category shows up as a client
+/// (sales screens) or a supplier (purchases screen).
+model PartnerCategory {
+  id        String         @id @default(uuid())
+  code      String         @unique
+  label     String
+  isSupplier Boolean       @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  partners  Partner[]
+  prices    ArticlePrice[]
+}
+
+model Partner {
+  id               String            @id @default(uuid())
+  code             String            @unique
+  raisonSociale    String
+  categoryId       String
+  category         PartnerCategory   @relation(fields: [categoryId], references: [id])
+  zoneId           String?
+  zone             Zone?             @relation(fields: [zoneId], references: [id])
+  seuilAutorise    Decimal           @default(0.0)
+  balance          Decimal           @default(0.0)
+  address          String?
+  phone            String?
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  documents        Document[]
+  cashTransactions CashTransaction[]
+
+  @@index([categoryId])
+  @@index([zoneId])
+}
+
+model Article {
+  id          String         @id @default(uuid())
+  code        String         @unique
+  barcode     String?
+  designation String
+  category    String?
+  pump        Decimal        @default(0.0)
+  tvaRate     Decimal        @default(19.0)
+  seuilReappro Int?
+  active      Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  prices      ArticlePrice[]
+  stocks      ArticleStock[]
+  lines       DocumentLine[]
+
+  @@index([barcode])
+  @@index([designation])
+}
+
+model ArticlePrice {
+  id         String          @id @default(uuid())
+  articleId  String
+  article    Article         @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   PartnerCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  priceHT    Decimal         @default(0.0)
+  priceTTC   Decimal         @default(0.0)
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([articleId, categoryId])
+}
+
+model ArticleStock {
+  id          String   @id @default(uuid())
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  depotId     String
+  depot       Depot    @relation(fields: [depotId], references: [id], onDelete: Cascade)
+  qtyInStock  Int      @default(0)
+  qtyReserved Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([articleId, depotId])
+}
+
+model Document {
+  id                 String            @id @default(uuid())
+  reference          String            @unique
+  supplierInvoiceNum String?
+  type               DocumentType
+  status             DocumentStatus    @default(OUVERT)
+  partnerId          String?
+  partner            Partner?          @relation(fields: [partnerId], references: [id])
+  depotId            String
+  depot              Depot             @relation("DocumentSourceDepot", fields: [depotId], references: [id])
+  destDepotId        String?
+  destDepot          Depot?            @relation("DocumentDestDepot", fields: [destDepotId], references: [id])
+  livreurId          String?
+  livreur            Livreur?          @relation(fields: [livreurId], references: [id])
+  paymentMode        PaymentMode       @default(ESPECE)
+  totalHT            Decimal           @default(0.0)
+  remise             Decimal           @default(0.0)
+  totalTVA           Decimal           @default(0.0)
+  stampDuty          Decimal           @default(0.0)
+  totalTTC           Decimal           @default(0.0)
+  marginHT           Decimal           @default(0.0)
+  marginPercent      Decimal           @default(0.0)
+  motif              String?
+  createdById        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  validatedAt        DateTime?
+  cancelledAt        DateTime?
+  lines              DocumentLine[]
+  charges            Charge[]
+  cashTransactions   CashTransaction[]
+
+  @@index([partnerId])
+  @@index([livreurId])
+  @@index([type, status])
+  @@index([createdAt])
+}
+
+model DocumentLine {
+  id               String   @id @default(uuid())
+  documentId       String
+  document         Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  articleId        String
+  article          Article  @relation(fields: [articleId], references: [id])
+  depotId          String
+  depot            Depot    @relation(fields: [depotId], references: [id])
+  quantity         Int
+  unitPriceHT      Decimal
+  discountPercent  Decimal  @default(0.0)
+  tvaRate          Decimal
+  totalHT          Decimal  @default(0.0)
+  totalTTC         Decimal  @default(0.0)
+  purchaseCostPUMP Decimal  @default(0.0)
+
+  @@index([documentId])
+  @@index([articleId])
+}
+
+model Charge {
+  id             String       @id @default(uuid())
+  chargeClassId  String
+  chargeClass    ChargeClass  @relation(fields: [chargeClassId], references: [id])
+  amount         Decimal
+  description    String
+  paymentMode    PaymentMode  @default(ESPECE)
+  date           DateTime     @default(now())
+  documentId     String?
+  document       Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([chargeClassId])
+  @@index([documentId])
+}
+
+model CashTransaction {
+  id          String      @id @default(uuid())
+  documentId  String?
+  document    Document?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  partnerId   String?
+  partner     Partner?    @relation(fields: [partnerId], references: [id])
+  reference   String?
+  bankName    String?
+  type        CashTxType
+  amount      Decimal
+  paymentMode PaymentMode
+  description String
+  createdAt   DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([partnerId])
+}

@@ -1,0 +1,18 @@
+node_modules
+dist
+dist-electron
+build
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.DS_Store
+desktop/out
+
+# Local-only editor/agent settings
+.claude/settings.local.json
+
+# NOTE: server/prisma/migrations is intentionally NOT ignored.
+# Migrations are schema version history and must be committed so production
+# databases can be evolved without data loss (`prisma migrate deploy`).

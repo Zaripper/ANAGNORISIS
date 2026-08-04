@@ -1,0 +1,36 @@
+{
+  "name": "@anagnorisis/desktop",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n VITE,TS,ELECTRON -c green,yellow,blue \"vite\" \"tsc -p tsconfig.electron.json -w --preserveWatchOutput\" \"wait-on dist-electron/main.js && electron .\"",
+    "build": "vite build && tsc -p tsconfig.json && tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "lint": "echo \"desktop: lint not configured\""
+  },
+  "dependencies": {
+    "@anagnorisis/shared": "file:../shared",
+    "@tanstack/react-table": "^8.20.5",
+    "lucide-react": "^0.453.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.5.4",
+    "concurrently": "^9.2.1",
+    "electron": "^41.7.1",
+    "postcss": "^8.5.22",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^6.4.3",
+    "vite-plugin-electron": "^1.1.0",
+    "wait-on": "^8.0.1"
+  }
+}

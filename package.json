@@ -1,0 +1,26 @@
+{
+  "name": "anagnorisis-erp",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "shared",
+    "server",
+    "desktop"
+  ],
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n API,DESKTOP -c cyan,magenta \"npm run dev --workspace server\" \"npm run dev --workspace desktop\"",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "db:generate": "npm run prisma:generate --workspace server",
+    "db:push": "npm run prisma:push --workspace server",
+    "db:seed": "npm run prisma:seed --workspace server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.6.3"
+  }
+}
