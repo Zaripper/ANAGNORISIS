@@ -1,8 +1,23 @@
 @import "tailwindcss";
+
+/**
+ * Global baseline only. Component styling lives in src/components/ui.tsx.
+ *
+ * This file previously carried ~440 lines of CSS from an earlier dark-blue design
+ * (.app-shell, .data-grid, .workspace-panel, ...). Not one of those classes was
+ * referenced by any component, and its :root/body rules set a dark background that
+ * the light UI then had to paint over. All of it has been removed.
+ */
+
 :root {
-  font-family: Segoe UI, Arial, sans-serif;
-  color: #e5eefc;
-  background: #0b1220;
+  font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  color: #1e293b;
+  background: #faf9f6;
+
+  /* Crisper text rendering for the dense tables this app is built around. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
 }
 
 * {
@@ -11,440 +26,54 @@
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  background: #faf9f6;
 }
 
 button {
   font: inherit;
 }
 
-.app-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+/* Numeric columns must line up: tabular figures stop amounts jittering between rows. */
+.font-mono,
+td,
+th {
+  font-variant-numeric: tabular-nums;
 }
 
-.titlebar,
-.menu-bar,
-.status-bar,
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* Slimmer scrollbars so dense data grids lose less usable width. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-.titlebar {
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: #1e3a8a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.brand {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.subtitle {
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-.status-pill {
-  background: rgba(255, 255, 255, 0.12);
-  padding: 6px 10px;
-  border-radius: 4px;
-}
-
-.menu-bar {
-  padding: 6px 10px;
-  background: #dbeafe;
-  color: #0f172a;
-}
-
-.menu-item,
-.toolbar button {
-  border: 1px solid rgba(15, 23, 42, 0.15);
-  background: #eff6ff;
-  padding: 6px 10px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.workspace {
-  padding: 10px;
-}
-
-.workspace-panel {
-  min-height: calc(100vh - 130px);
-  background: #e5eefc;
-  color: #0f172a;
-  border: 1px solid #94a3b8;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-}
-
-.panel-header {
-  background: #1e3a8a;
-  color: white;
-  font-weight: 700;
-  padding: 8px 10px;
-}
-
-.toolbar {
-  padding: 8px 10px;
-  background: #bfdbfe;
-}
-
-.summary-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 8px 10px;
-  background: #dbeafe;
-}
-
-.summary-card {
-  background: #eff6ff;
-  border: 1px solid #93c5fd;
-  border-radius: 4px;
-  padding: 8px 10px;
-  display: flex;
-  justify-content: space-between;
-}
-
-.dense-grid {
-  display: grid;
-  grid-template-columns: 180px 120px 1fr 80px;
-  align-content: start;
-  overflow: auto;
-  border-top: 1px solid #94a3b8;
-}
-
-.grid-head,
-.grid-row {
-  padding: 8px 10px;
-  border-right: 1px solid #cbd5e1;
-  border-bottom: 1px solid #cbd5e1;
-  min-height: 34px;
-}
-
-.grid-head {
-  background: #1d4ed8;
-  color: white;
-  font-weight: 600;
-}
-
-.grid-row {
-  background: white;
-}
-
-.split-panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 10px;
-  background: #dbeafe;
-}
-
-@media (max-width: 1200px) {
-  .split-panels,
-  .summary-strip {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 900px) {
-  .split-panels,
-  .summary-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .dense-grid {
-    grid-template-columns: 140px 110px 1fr 60px;
-  }
-}
-
-.list-panel {
-  background: white;
-  border: 1px solid #94a3b8;
-}
-
-.list-title {
-  background: #1d4ed8;
-  color: white;
-  padding: 6px 10px;
-  font-weight: 600;
-}
-
-.list-row {
-  padding: 6px 10px;
-  border-top: 1px solid #e2e8f0;
-  font-size: 13px;
-}
-
-.status-bar {
-  justify-content: space-between;
-  padding: 6px 10px;
-  background: #1e3a8a;
-  color: white;
-  font-size: 12px;
-}
-
-/* Form Styling */
-.form-section {
-  padding: 12px 10px;
-  background: white;
-  border-top: 1px solid #ddd;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.form-row .form-field.full {
-  grid-column: 1 / -1;
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-field label {
-  font-weight: 600;
-  margin-bottom: 4px;
-  font-size: 13px;
-  color: #0f172a;
-}
-
-.form-field input,
-.form-field select {
-  padding: 6px 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  font: inherit;
-  font-size: 13px;
-}
-
-.form-field input:focus,
-.form-field select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 3px rgba(59, 130, 246, 0.3);
-}
-
-.select-display {
-  padding: 6px 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  background: white;
-  cursor: pointer;
-}
-
-.partner-picker,
-.search-results {
-  margin-top: 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  max-height: 200px;
-  overflow-y: auto;
-  background: white;
-}
-
-.partner-item,
-.search-result-item {
-  padding: 8px;
-  border-bottom: 1px solid #e5e7eb;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.partner-item:hover,
-.search-result-item:hover {
-  background: #f3f4f6;
-}
-
-.partner-item.warning {
-  border-left: 3px solid #dc2626;
-  background: #fef2f2;
-}
-
-.partner-code,
-.result-code {
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.partner-name,
-.result-name {
-  font-size: 12px;
-  color: #4b5563;
-}
-
-.partner-balance,
-.result-price {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 2px;
-}
-
-.warning-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #dc2626;
-  margin-top: 4px;
-}
-
-.grid-container {
-  padding: 0 10px;
-  background: white;
-  overflow-x: auto;
-  border-top: 1px solid #ddd;
-}
-
-.data-grid {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.data-grid thead {
-  background: #1d4ed8;
-  color: white;
-  position: sticky;
-  top: 0;
-}
-
-.data-grid th {
-  padding: 8px;
-  text-align: left;
-  font-weight: 600;
-  border: 1px solid #ddd;
-}
-
-.data-grid td {
-  padding: 8px;
-  border: 1px solid #ddd;
-}
-
-.data-grid tbody tr:hover {
-  background: #f9fafb;
-}
-
-.data-grid input {
-  width: 100%;
-  padding: 4px 6px;
-  border: 1px solid #cbd5e1;
-  border-radius: 2px;
-  font: inherit;
-  font-size: 12px;
-}
-
-.footer-summary {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  padding: 10px;
-  background: #dbeafe;
-  border-top: 1px solid #cbd5e1;
-}
-
-.field-label {
-  display: block;
-  margin-bottom: 4px;
-  font-weight: 600;
-  color: #0f172a;
-  font-size: 13px;
-}
-
-.field-input {
-  padding: 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  width: 100%;
-  font-size: 13px;
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-card {
-  background: white;
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 6px;
-  padding: 20px;
-  max-width: 400px;
-  width: 90%;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  color: #0f172a;
+  border: 2px solid #faf9f6;
 }
 
-.modal-title {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  color: #0f172a;
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 16px;
+/* The app is a desktop shell: prevent the whole window from rubber-banding. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
-.menu-dropdown {
-  display: none;
-  position: absolute;
-  background: white;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  min-width: 160px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 10;
-}
-
-.menu-group:hover .menu-dropdown {
-  display: block;
-}
-
-.menu-dropdown-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 12px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 13px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.menu-dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.menu-dropdown-item:hover {
-  background: #f3f4f6;
-}
-
-.grid-placeholder {
-  padding: 20px;
-  text-align: center;
-  color: #6b7280;
-  font-size: 13px;
+/* Respect users who ask for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

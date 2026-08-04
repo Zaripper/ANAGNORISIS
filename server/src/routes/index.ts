@@ -307,10 +307,26 @@ api.get('/charges', async (_req, res) => {
   res.json(await prisma.charge.findMany({ include: { chargeClass: true, document: true }, orderBy: { date: 'desc' } }));
 });
 
+/**
+ * `date` arrives as an optional ISO string but the column is non-nullable with a
+ * `now()` default, so an explicit null must be dropped rather than forwarded —
+ * passing it through would make Prisma reject the write at runtime.
+ */
+function chargeDateFields(date: string | null | undefined): { date?: Date } {
+  if (!date) return {};
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) throw new Error('INVALID_DATE');
+  return { date: parsed };
+}
+
 api.post('/charges', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
   try {
-    const input = createChargeSchema.parse(req.body);
-    res.status(201).json(await prisma.charge.create({ data: input, include: { chargeClass: true, document: true } }));
+    const { date, ...input } = createChargeSchema.parse(req.body);
+    const charge = await prisma.charge.create({
+      data: { ...input, ...chargeDateFields(date) },
+      include: { chargeClass: true, document: true }
+    });
+    res.status(201).json(charge);
   } catch (error) {
     handleError(res, error);
   }
@@ -318,8 +334,13 @@ api.post('/charges', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res)
 
 api.put('/charges/:id', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
   try {
-    const input = updateChargeSchema.parse(req.body);
-    res.json(await prisma.charge.update({ where: { id: req.params.id }, data: input, include: { chargeClass: true, document: true } }));
+    const { date, ...input } = updateChargeSchema.parse(req.body);
+    const charge = await prisma.charge.update({
+      where: { id: req.params.id },
+      data: { ...input, ...chargeDateFields(date) },
+      include: { chargeClass: true, document: true }
+    });
+    res.json(charge);
   } catch (error) {
     handleError(res, error);
   }

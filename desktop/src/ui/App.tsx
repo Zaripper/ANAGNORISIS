@@ -1,5 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { apiRequest, ApiError } from '../services/apiClient';
+import { apiRequest, ApiError, getStoredUser } from '../services/apiClient';
+import { AppShell, DjemroudLogo } from '../components/AppShell';
+import type { ScreenId } from './navigation';
+import type { UserRole } from '@anagnorisis/shared';
+import {
+  CHARGE_CLASS_FIELDS,
+  DEPOT_FIELDS,
+  LIVREUR_FIELDS,
+  ReferenceDataScreen,
+  TYPE_REGLEMENT_FIELDS,
+  ZONE_FIELDS,
+  describeError
+} from '../screens/ReferenceData';
+import type { RefField } from '../screens/ReferenceData';
+import { Badge, Button, Card, Field, Input, Modal, Screen, Select, ToastHost, useToasts } from '../components/ui';
 
 // ==========================================
 // 1. TYPES & INTERFACES
@@ -145,34 +159,13 @@ interface DocumentRow {
   }[];
 }
 
-type ERPView =
-  | 'ACHATS'
-  | 'BONS_PREP'
-  | 'VENTES_VALIDATION'
-  | 'AVOIRS_ACHATS'
-  | 'AVOIRS_VENTES'
-  | 'REGULES'
-  | 'TRANSFERTS'
-  | 'CHEQUES'
-  | 'VIREMENT'
-  | 'JOURNAL_CAISSE'
-  | 'JOURNAL_BANQUE'
-  | 'TRANSACTIONS_CAISSIERES'
-  | 'SUIVI_PARTENAIRE'
-  | 'CREANCES_DETTES'
-  | 'PARTENAIRES_BLOQUES'
-  | 'CREANCES_A_RECOUVRER'
-  | 'CHIFFRE_AFFAIRES'
-  | 'TABLEAU_BORD'
-  | 'VENTES_ARTICLES'
-  | 'ETATS_ARTICLES'
-  | 'PRIX_ARTICLES'
-  | 'PARTENAIRES'
-  | 'STOCKS'
-  | 'MASTER_DATA'
-  | 'DEPOTS'
-  | 'PLACEHOLDER'
-  | null;
+/**
+ * The view type is now derived from the screen registry rather than declared
+ * separately, so a screen cannot exist in navigation without a matching id here
+ * (or vice versa) — that mismatch is what previously hid "Classes de charges"
+ * behind a generic "Données de base" entry.
+ */
+type ERPView = ScreenId | null;
 
 type BackendDocumentType =
   | 'ACHAT'
@@ -200,29 +193,6 @@ function viewToDocumentType(view: ERPView): BackendDocumentType {
 
 function num(v: unknown) {
   return Number(v ?? 0);
-}
-
-// ==========================================
-// 2. BRAND LOGO COMPONENT (Ets Djemroud)
-// ==========================================
-function DjemroudLogo({ className = 'w-8 h-8' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g fill="#0F5B38">
-        <path d="M100 95 C80 60, 45 60, 45 85 C45 105, 80 100, 100 95 Z" />
-        <path d="M95 100 C60 80, 60 45, 85 45 C105 45, 100 80, 95 100 Z" />
-        <path d="M105 100 C140 80, 140 45, 115 45 C95 45, 100 80, 105 100 Z" />
-        <path d="M100 95 C120 60, 155 60, 155 85 C155 105, 120 100, 100 95 Z" />
-        <path d="M95 100 C60 120, 60 155, 85 155 C105 155, 100 120, 95 100 Z" />
-        <path d="M100 105 C80 140, 45 140, 45 115 C45 95, 80 100, 100 105 Z" />
-        <path d="M105 100 C140 120, 140 155, 115 155 C95 155, 100 120, 105 100 Z" />
-        <path d="M100 105 C120 140, 155 140, 155 115 C45 95, 120 100, 100 105 Z" />
-        <path d="M100 110 Q98 150 102 170" stroke="#0F5B38" strokeWidth="6" strokeLinecap="round" fill="none" />
-        <path d="M99 140 Q85 135 78 125 Q90 125 99 140 Z" />
-        <path d="M101 145 Q115 140 122 130 Q110 130 101 145 Z" />
-      </g>
-    </svg>
-  );
 }
 
 // ==========================================
@@ -2215,343 +2185,6 @@ function EtatsArticlesScreen({ articles }: { articles: Article[] }) {
   );
 }
 
-function MasterDataScreen({
-  livreurs,
-  zones,
-  chargeClasses,
-  typeReglements,
-  onRefresh
-}: {
-  livreurs: Livreur[];
-  zones: Zone[];
-  chargeClasses: ChargeClass[];
-  typeReglements: TypeReglement[];
-  onRefresh: () => Promise<void>;
-}) {
-  const [newLivreur, setNewLivreur] = useState({ code: '', name: '', phone: '' });
-  const [newZone, setNewZone] = useState({ code: '', name: '' });
-  const [newChargeClass, setNewChargeClass] = useState({ code: '', label: '' });
-  const [newTypeReglement, setNewTypeReglement] = useState({ code: '', label: '' });
-
-  async function submitLivreur(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newLivreur.code || !newLivreur.name) return;
-    await apiRequest('/livreurs', { method: 'POST', body: { code: newLivreur.code.toUpperCase(), name: newLivreur.name, phone: newLivreur.phone || null } });
-    setNewLivreur({ code: '', name: '', phone: '' });
-    await onRefresh();
-  }
-
-  async function submitZone(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newZone.code || !newZone.name) return;
-    await apiRequest('/zones', { method: 'POST', body: { code: newZone.code.toUpperCase(), name: newZone.name } });
-    setNewZone({ code: '', name: '' });
-    await onRefresh();
-  }
-
-  async function submitChargeClass(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newChargeClass.code || !newChargeClass.label) return;
-    await apiRequest('/charge-classes', { method: 'POST', body: { code: newChargeClass.code.toUpperCase(), label: newChargeClass.label } });
-    setNewChargeClass({ code: '', label: '' });
-    await onRefresh();
-  }
-
-  async function submitTypeReglement(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newTypeReglement.code || !newTypeReglement.label) return;
-    await apiRequest('/type-reglements', { method: 'POST', body: { code: newTypeReglement.code.toUpperCase(), label: newTypeReglement.label } });
-    setNewTypeReglement({ code: '', label: '' });
-    await onRefresh();
-  }
-
-  return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-7xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-        <span className="font-extrabold text-slate-900 text-base">Données de base</span>
-        <p className="text-slate-400 text-[11px] mt-1">Gestion rapide des livreurs, zones, classes de charges et types de règlement.</p>
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-auto">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-slate-900">Livreurs</span>
-            <span className="text-slate-400 text-[10px]">{livreurs.length} élément(s)</span>
-          </div>
-          <div className="overflow-auto max-h-48 border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="p-2">Code</th>
-                  <th className="p-2">Nom</th>
-                  <th className="p-2">Téléphone</th>
-                </tr>
-              </thead>
-              <tbody>
-                {livreurs.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="p-2 font-mono text-[#0F5B38]">{item.code}</td>
-                    <td className="p-2">{item.name}</td>
-                    <td className="p-2">{item.phone ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <form onSubmit={submitLivreur} className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-3">
-            <input value={newLivreur.code} onChange={(e) => setNewLivreur({ ...newLivreur, code: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Code" />
-            <input value={newLivreur.name} onChange={(e) => setNewLivreur({ ...newLivreur, name: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Nom" />
-            <input value={newLivreur.phone} onChange={(e) => setNewLivreur({ ...newLivreur, phone: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Téléphone" />
-            <button type="submit" className="bg-[#0F5B38] text-white rounded-lg px-3 py-1.5 text-xs font-semibold">Ajouter</button>
-          </form>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-slate-900">Zones</span>
-            <span className="text-slate-400 text-[10px]">{zones.length} élément(s)</span>
-          </div>
-          <div className="overflow-auto max-h-48 border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="p-2">Code</th>
-                  <th className="p-2">Nom</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zones.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="p-2 font-mono text-[#0F5B38]">{item.code}</td>
-                    <td className="p-2">{item.name}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <form onSubmit={submitZone} className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-3">
-            <input value={newZone.code} onChange={(e) => setNewZone({ ...newZone, code: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Code" />
-            <input value={newZone.name} onChange={(e) => setNewZone({ ...newZone, name: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Nom" />
-            <button type="submit" className="bg-[#0F5B38] text-white rounded-lg px-3 py-1.5 text-xs font-semibold">Ajouter</button>
-          </form>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-slate-900">Classes de charges</span>
-            <span className="text-slate-400 text-[10px]">{chargeClasses.length} élément(s)</span>
-          </div>
-          <div className="overflow-auto max-h-48 border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="p-2">Code</th>
-                  <th className="p-2">Libellé</th>
-                </tr>
-              </thead>
-              <tbody>
-                {chargeClasses.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="p-2 font-mono text-[#0F5B38]">{item.code}</td>
-                    <td className="p-2">{item.label}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <form onSubmit={submitChargeClass} className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-3">
-            <input value={newChargeClass.code} onChange={(e) => setNewChargeClass({ ...newChargeClass, code: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Code" />
-            <input value={newChargeClass.label} onChange={(e) => setNewChargeClass({ ...newChargeClass, label: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Libellé" />
-            <button type="submit" className="bg-[#0F5B38] text-white rounded-lg px-3 py-1.5 text-xs font-semibold">Ajouter</button>
-          </form>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-slate-900">Types de règlement</span>
-            <span className="text-slate-400 text-[10px]">{typeReglements.length} élément(s)</span>
-          </div>
-          <div className="overflow-auto max-h-48 border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="p-2">Code</th>
-                  <th className="p-2">Libellé</th>
-                </tr>
-              </thead>
-              <tbody>
-                {typeReglements.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="p-2 font-mono text-[#0F5B38]">{item.code}</td>
-                    <td className="p-2">{item.label}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <form onSubmit={submitTypeReglement} className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-3">
-            <input value={newTypeReglement.code} onChange={(e) => setNewTypeReglement({ ...newTypeReglement, code: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Code" />
-            <input value={newTypeReglement.label} onChange={(e) => setNewTypeReglement({ ...newTypeReglement, label: e.target.value })} className="border border-slate-200 rounded-lg px-2 py-1" placeholder="Libellé" />
-            <button type="submit" className="bg-[#0F5B38] text-white rounded-lg px-3 py-1.5 text-xs font-semibold">Ajouter</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Full CRUD screen for Dépôts (list, create, edit code/name/défaut). */
-function DepotsScreen({ depots, onRefresh }: { depots: Depot[]; onRefresh: () => Promise<void> }) {
-  const [newDepot, setNewDepot] = useState({ code: '', name: '', isDefault: false });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState({ code: '', name: '', isDefault: false });
-  const [saving, setSaving] = useState(false);
-
-  async function submitNew(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newDepot.code || !newDepot.name) return;
-    setSaving(true);
-    try {
-      await apiRequest('/depots', { method: 'POST', body: { code: newDepot.code.toUpperCase(), name: newDepot.name, isDefault: newDepot.isDefault } });
-      setNewDepot({ code: '', name: '', isDefault: false });
-      await onRefresh();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function startEdit(d: Depot) {
-    setEditingId(d.id);
-    setEditDraft({ code: d.code, name: d.name, isDefault: d.isDefault });
-  }
-
-  async function saveEdit(id: string) {
-    setSaving(true);
-    try {
-      await apiRequest(`/depots/${id}`, {
-        method: 'PUT',
-        body: { code: editDraft.code.toUpperCase(), name: editDraft.name, isDefault: editDraft.isDefault }
-      });
-      setEditingId(null);
-      await onRefresh();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-4xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-        <span className="font-extrabold text-slate-900 text-base">Dépôts</span>
-        <p className="text-slate-400 text-[11px] mt-1">Emplacements de stockage (ex: Show-room, Dépôt principal).</p>
-      </div>
-
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
-        <table className="w-full text-left border-collapse text-xs">
-          <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
-            <tr>
-              <th className="p-3">Code</th>
-              <th className="p-3">Nom</th>
-              <th className="p-3 text-center">Par défaut</th>
-              <th className="p-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {depots.map((d) => (
-              <tr key={d.id}>
-                {editingId === d.id ? (
-                  <>
-                    <td className="p-2">
-                      <input
-                        value={editDraft.code}
-                        onChange={(e) => setEditDraft({ ...editDraft, code: e.target.value })}
-                        className="border border-slate-200 rounded-lg px-2 py-1 w-full font-mono"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        value={editDraft.name}
-                        onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
-                        className="border border-slate-200 rounded-lg px-2 py-1 w-full"
-                      />
-                    </td>
-                    <td className="p-2 text-center">
-                      <input
-                        type="checkbox"
-                        checked={editDraft.isDefault}
-                        onChange={(e) => setEditDraft({ ...editDraft, isDefault: e.target.checked })}
-                      />
-                    </td>
-                    <td className="p-2 text-right flex justify-end gap-2">
-                      <button
-                        onClick={() => saveEdit(d.id)}
-                        disabled={saving}
-                        className="bg-[#0F5B38] text-white rounded-lg px-3 py-1 text-xs font-semibold disabled:opacity-40"
-                      >
-                        Enregistrer
-                      </button>
-                      <button onClick={() => setEditingId(null)} className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-medium text-slate-600">
-                        Annuler
-                      </button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="p-3 font-mono font-bold text-[#0F5B38]">{d.code}</td>
-                    <td className="p-3 font-medium text-slate-800">{d.name}</td>
-                    <td className="p-3 text-center">
-                      {d.isDefault && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Par défaut</span>}
-                    </td>
-                    <td className="p-3 text-right">
-                      <button onClick={() => startEdit(d)} className="text-[#0F5B38] hover:underline font-medium">
-                        Modifier
-                      </button>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-            {depots.length === 0 && (
-              <tr>
-                <td colSpan={4} className="p-8 text-center text-slate-400">
-                  Aucun dépôt.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <form onSubmit={submitNew} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-end gap-3">
-        <div className="flex-1">
-          <label className="block text-slate-400 text-[10px] font-bold uppercase mb-1">Code</label>
-          <input
-            value={newDepot.code}
-            onChange={(e) => setNewDepot({ ...newDepot, code: e.target.value })}
-            className="w-full border border-slate-200 rounded-lg px-2 py-1.5 font-mono"
-            placeholder="ex: DEPOT_NORD"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="block text-slate-400 text-[10px] font-bold uppercase mb-1">Nom</label>
-          <input
-            value={newDepot.name}
-            onChange={(e) => setNewDepot({ ...newDepot, name: e.target.value })}
-            className="w-full border border-slate-200 rounded-lg px-2 py-1.5"
-            placeholder="ex: Dépôt Nord"
-          />
-        </div>
-        <label className="flex items-center gap-1.5 text-slate-600 pb-2">
-          <input type="checkbox" checked={newDepot.isDefault} onChange={(e) => setNewDepot({ ...newDepot, isDefault: e.target.checked })} />
-          Par défaut
-        </label>
-        <button type="submit" disabled={saving} className="bg-[#0F5B38] text-white rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-40">
-          Ajouter
-        </button>
-      </form>
-    </div>
-  );
-}
-
 /**
  * Generic attach-a-note widget. Comments are polymorphic (entityType + entityId) so this
  * single component covers Partner/Article/Document detail views without a dedicated table
@@ -2627,6 +2260,11 @@ function CommentsPanel({ entityType, entityId }: { entityType: string; entityId:
   );
 }
 
+/**
+ * Create-partner dialog. Rebuilt on the shared Modal/Field primitives; it was
+ * previously styled as a Windows-98 grey dialog (#d4d0c8 / #0a246a) which clashed
+ * with every other surface in the app.
+ */
 function NewPartnerModal({
   categories,
   zones,
@@ -2641,128 +2279,154 @@ function NewPartnerModal({
   const [code, setCode] = useState('');
   const [raisonSociale, setRaisonSociale] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
-  const [zoneId, setZoneId] = useState(zones[0]?.id ?? '');
+  const [zoneId, setZoneId] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const next: Record<string, string> = {};
+    if (!code.trim()) next.code = 'Champ obligatoire';
+    if (!raisonSociale.trim()) next.raisonSociale = 'Champ obligatoire';
+    if (!categoryId) next.categoryId = 'Sélectionnez une catégorie';
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+    onSubmit({ code: code.trim().toUpperCase(), raisonSociale: raisonSociale.trim(), categoryId, zoneId: zoneId || null });
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-[#d4d0c8] border-2 border-blue-900 shadow-2xl w-[450px] p-3 text-xs">
-        <div className="bg-[#0a246a] text-white font-bold px-2 py-1 mb-3">Nouveau Client / Partenaire</div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!code || !raisonSociale || !categoryId) return;
-            onSubmit({ code: code.toUpperCase(), raisonSociale, categoryId, zoneId: zoneId || null });
-          }}
-          className="flex flex-col gap-2"
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block font-bold">Code Client:</label>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full border p-1 uppercase bg-white font-mono"
-                placeholder="ex: CLI009"
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold">Catégorie:</label>
-              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full border p-1 bg-white font-bold">
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.label} ({cat.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block font-bold">Raison Sociale / Nom:</label>
-            <input
-              type="text"
-              value={raisonSociale}
-              onChange={(e) => setRaisonSociale(e.target.value)}
-              className="w-full border p-1 bg-white"
-              placeholder="ex: EURL PHARMA PLUS"
-              required
-            />
-          </div>
-          <div>
-            <label className="block font-bold">Zone:</label>
-            <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="w-full border p-1 bg-white font-bold">
-              <option value="">Sans zone</option>
-              {zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name} ({zone.code})
+    <Modal
+      title="Nouveau partenaire"
+      description="Client ou fournisseur selon la catégorie choisie."
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button variant="primary" onClick={submit as unknown as React.MouseEventHandler<HTMLButtonElement>}>
+            Créer le partenaire
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Code" required error={errors.code}>
+            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="ex: CLI009" className="font-mono uppercase" />
+          </Field>
+          <Field label="Catégorie" required error={errors.categoryId}>
+            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              <option value="">— Choisir —</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label} ({cat.code})
                 </option>
               ))}
-            </select>
-          </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <button type="button" onClick={onClose} className="bg-[#ece9d8] border px-3 py-1 font-bold">
-              Annuler
-            </button>
-            <button type="submit" className="bg-[#0a246a] text-white px-3 py-1 font-bold">
-              Créer Client
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            </Select>
+          </Field>
+        </div>
+        <Field label="Raison sociale" required error={errors.raisonSociale}>
+          <Input value={raisonSociale} onChange={(e) => setRaisonSociale(e.target.value)} placeholder="ex: EURL PHARMA PLUS" />
+        </Field>
+        <Field label="Zone" hint="Optionnel — sert au regroupement géographique.">
+          <Select value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+            <option value="">Sans zone</option>
+            {zones.map((zone) => (
+              <option key={zone.id} value={zone.id}>
+                {zone.name} ({zone.code})
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
+      </form>
+    </Modal>
   );
 }
 
+/** Create-category dialog, rebuilt on the shared primitives (see above). */
 function NewCategoryModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: { code: string; label: string }) => void }) {
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const next: Record<string, string> = {};
+    if (!code.trim()) next.code = 'Champ obligatoire';
+    if (!label.trim()) next.label = 'Champ obligatoire';
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+    onSubmit({ code: code.trim().toUpperCase(), label: label.trim() });
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-[#d4d0c8] border-2 border-blue-900 shadow-2xl w-96 p-3 text-xs">
-        <div className="bg-[#0a246a] text-white font-bold px-2 py-1 mb-3">Créer une nouvelle catégorie de partenaire</div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!code || !label) return;
-            onSubmit({ code: code.toUpperCase(), label });
-          }}
-          className="flex flex-col gap-2"
-        >
+    <Modal
+      title="Nouvelle catégorie de partenaire"
+      description="Définit un palier tarifaire réutilisable."
+      onClose={onClose}
+      width="max-w-md"
+      footer={
+        <>
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button variant="primary" onClick={submit as unknown as React.MouseEventHandler<HTMLButtonElement>}>
+            Enregistrer
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <Field label="Code" required error={errors.code}>
+          <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="ex: PHARM_SUD" className="font-mono uppercase" />
+        </Field>
+        <Field label="Libellé" required error={errors.label}>
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="ex: Pharmacies Réseau Sud" />
+        </Field>
+        <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Partner categories carry one extra flag beyond code/label: `isSupplier` decides
+ * whether partners in the category appear on the purchasing side or the sales side.
+ */
+const PARTNER_CATEGORY_FIELDS: RefField[] = [
+  { key: 'code', label: 'Code', type: 'text', required: true, uppercase: true, mono: true, placeholder: 'ex: PHARM_SUD' },
+  { key: 'label', label: 'Libellé', type: 'text', required: true, placeholder: 'ex: Pharmacies Réseau Sud' },
+  { key: 'isSupplier', label: 'Catégorie fournisseur (achats)', type: 'boolean', badgeLabel: 'Fournisseur' }
+];
+
+function AProposScreen() {
+  return (
+    <Screen title="À propos" description="Informations sur l'application" maxWidth="max-w-2xl">
+      <Card>
+        <div className="flex items-center gap-4 mb-4">
+          <DjemroudLogo className="w-14 h-14" />
           <div>
-            <label className="block font-bold">Code Catégorie:</label>
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className="w-full border p-1 font-mono uppercase bg-white"
-              placeholder="ex: PHARM_SUD"
-              required
-            />
+            <div className="font-extrabold text-slate-900 text-sm">Anagnorisis ERP</div>
+            <div className="text-slate-500 text-[11px]">Ets Djemroud — Parapharmacie Gros &amp; Détail</div>
+          </div>
+        </div>
+        <dl className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <dt className="text-slate-400 text-[10px] font-bold uppercase">Version</dt>
+            <dd className="font-mono text-slate-800">0.1.0</dd>
           </div>
           <div>
-            <label className="block font-bold">Libellé / Nom:</label>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              className="w-full border p-1 bg-white"
-              placeholder="ex: Pharmacies Réseau Sud"
-              required
-            />
+            <dt className="text-slate-400 text-[10px] font-bold uppercase">Base de données</dt>
+            <dd className="text-slate-800">PostgreSQL</dd>
           </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <button type="button" onClick={onClose} className="bg-[#ece9d8] border px-3 py-1 font-bold">
-              Annuler
-            </button>
-            <button type="submit" className="bg-[#0a246a] text-white px-3 py-1 font-bold">
-              Enregistrer
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </dl>
+        <p className="text-slate-400 text-[11px] mt-4 leading-relaxed">
+          Raccourci : <kbd className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Ctrl</kbd> +{' '}
+          <kbd className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">K</kbd> ouvre la recherche d'écrans.
+        </p>
+      </Card>
+    </Screen>
   );
 }
 
@@ -2770,18 +2434,20 @@ function NewCategoryModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
 // 4. MAIN APPLICATION COMPONENT
 // ==========================================
 export default function App({ onLogout }: { onLogout: () => void }) {
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<ERPView>(null);
-  const [regulesMode, setRegulesMode] = useState<'REGULE_PLUS' | 'REGULE_MOINS'>('REGULE_PLUS');
-  const [chequeMode, setChequeMode] = useState<'RECETTE' | 'DEPENSE'>('RECETTE');
   const [virementMode, setVirementMode] = useState<'RECETTE' | 'DEPENSE'>('RECETTE');
-  const [placeholderLabel, setPlaceholderLabel] = useState<string>('');
 
-  function openPlaceholder(label: string) {
-    setPlaceholderLabel(label);
-    setCurrentView('PLACEHOLDER');
-    setActiveMenu(null);
-  }
+  // Identifies the signed-in user for the shell (name, role) and for role-gated
+  // navigation entries. Read from the session the login screen persisted.
+  const currentUser = useMemo(() => getStoredUser<{ username: string; role: UserRole }>(), []);
+
+  /**
+   * Régules and chèques used to share one view with a hidden mode toggle, so the
+   * sidebar could not show which one you were on. They are now distinct screens
+   * and the mode is derived from the screen id — one less piece of hidden state.
+   */
+  const regulesMode: 'REGULE_PLUS' | 'REGULE_MOINS' = currentView === 'REGULES_MOINS' ? 'REGULE_MOINS' : 'REGULE_PLUS';
+  const chequeMode: 'RECETTE' | 'DEPENSE' = currentView === 'CHEQUES_DEPENSE' ? 'DEPENSE' : 'RECETTE';
 
   // Modals
   const [showPartnerModal, setShowPartnerModal] = useState(false);
@@ -3196,574 +2862,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#FAF9F6] text-slate-800 font-sans text-xs select-none overflow-hidden">
-      {/* ==========================================
-          1. TOP NAVIGATION HEADER
-         ========================================== */}
-      <header className="bg-white border-b border-slate-200/80 px-6 py-2.5 flex items-center justify-between z-30 shadow-2xs">
-        <div className="flex items-center gap-6">
-          <div onClick={() => setCurrentView(null)} className="flex items-center gap-2.5 cursor-pointer group">
-            <DjemroudLogo className="w-8 h-8 transition group-hover:scale-105" />
-            <div className="flex flex-col">
-              <span className="font-extrabold text-sm tracking-tight text-[#0F5B38]">ETS DJEMROUD</span>
-              <span className="text-[10px] text-slate-400 font-medium -mt-0.5">Parapharmacie • Gros &amp; Détail</span>
-            </div>
-          </div>
-
-          <nav className="flex items-center gap-1 ml-4 border-l border-slate-200 pl-4 relative">
-            {/* ---------- FICHIER ---------- */}
-            <div className="relative">
-              <button
-                onClick={() => setActiveMenu(activeMenu === 'fichier' ? null : 'fichier')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  activeMenu === 'fichier' ? 'bg-slate-100 text-[#0F5B38]' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Fichier
-              </button>
-              {activeMenu === 'fichier' && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-64 py-2 z-50 text-slate-700 text-xs max-h-[80vh] overflow-y-auto">
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900" onClick={() => { setCurrentView('MASTER_DATA'); setActiveMenu(null); }}>
-                    Données de base...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => {
-                      setShowNewCategoryModal(true);
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Catégories de partenaires...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('PARTENAIRES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Partenaires...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('PRIX_ARTICLES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Articles...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('DEPOTS');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Dépôts...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900" onClick={() => { setCurrentView('MASTER_DATA'); setActiveMenu(null); }}>
-                    Types des règles...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900" onClick={() => { setCurrentView('MASTER_DATA'); setActiveMenu(null); }}>
-                    Livreurs &amp; zones...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-rose-50 text-rose-600 font-semibold cursor-pointer"
-                    onClick={() => {
-                      setCurrentView(null);
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Quitter
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ---------- MOUVEMENT ---------- */}
-            <div className="relative">
-              <button
-                onClick={() => setActiveMenu(activeMenu === 'mouvement' ? null : 'mouvement')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  activeMenu === 'mouvement' ? 'bg-slate-100 text-[#0F5B38]' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Mouvement
-              </button>
-              {activeMenu === 'mouvement' && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-64 py-2 z-50 text-slate-700 text-xs max-h-[80vh] overflow-y-auto">
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Charges')}>
-                    Charges...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Commandes')}>
-                    Commandes...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Achats')}>
-                    Achats...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('ACHATS');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Saisie et validation des achats...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('AVOIRS_ACHATS');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Avoirs achats...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('BONS_PREP');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Bons de préparation...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Validation bon de préparation')}>
-                    Validation bon de préparation...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Proforma')}>
-                    Proforma...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Facture')}>
-                    Facture...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-[#0F5B38]"
-                    onClick={() => {
-                      setCurrentView('VENTES_VALIDATION');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Ventes...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('AVOIRS_VENTES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Avoirs ventes...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setRegulesMode('REGULE_PLUS');
-                      setCurrentView('REGULES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Régules plus...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setRegulesMode('REGULE_MOINS');
-                      setCurrentView('REGULES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Régules moins...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('TRANSFERTS');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Transferts inter-dépôts...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setChequeMode('RECETTE');
-                      setCurrentView('CHEQUES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Chèques recette...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setChequeMode('DEPENSE');
-                      setCurrentView('CHEQUES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Chèques dépense...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('VIREMENT');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Virement ou versement...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Saisie de la caisse et validation')}>
-                    Saisie de la caisse et validation...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('TRANSACTIONS_CAISSIERES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Transactions caissières...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ---------- CONSULTATION ---------- */}
-            <div className="relative">
-              <button
-                onClick={() => setActiveMenu(activeMenu === 'consultation' ? null : 'consultation')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  activeMenu === 'consultation' ? 'bg-slate-100 text-[#0F5B38]' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Consultation
-              </button>
-              {activeMenu === 'consultation' && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-64 py-2 z-50 text-slate-700 text-xs max-h-[80vh] overflow-y-auto">
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Etat 104 et Timbre')}>
-                    Etat 104 et Timbre...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Déclaration de la TVA')}>
-                    Déclaration de la TVA...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Déclaration de la TAP')}>
-                    Déclaration de la TAP...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Etat G50')}>
-                    Etat G50...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('STOCKS');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Stocks...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('PRIX_ARTICLES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Prix d'articles...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder("Mouvement d'un article")}>
-                    Mouvement d'un article...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Situation')}>
-                    Situation...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Articles à réapprovisionner')}>
-                    Articles à réapprovisionner...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('ETATS_ARTICLES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Etats des articles...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('JOURNAL_CAISSE');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Journal de caisse...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('JOURNAL_BANQUE');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Journal de banque...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('CREANCES_DETTES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Créances et dettes...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('CREANCES_A_RECOUVRER');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Créances à recouvrer...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('SUIVI_PARTENAIRE');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Suivi d'un partenaire...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('PARTENAIRES_BLOQUES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Liste des partenaires bloqués...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Liste des bons de préparations')}>
-                    Liste des bons de préparations...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder("Chiffre d'affaires par agent")}>
-                    Chiffre d'affaires par agent...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('CHIFFRE_AFFAIRES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Chiffres d'affaires...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('VENTES_ARTICLES');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Ventes d'articles...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder("Consultation de l'archive")}>
-                    Consultation de l'archive...
-                  </div>
-                  <div
-                    className="px-4 py-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-900"
-                    onClick={() => {
-                      setCurrentView('TABLEAU_BORD');
-                      setActiveMenu(null);
-                    }}
-                  >
-                    Tableau de bord...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Graphe et indices des évaluations')}>
-                    Graphe et indices des évaluations...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ---------- OUTILS ---------- */}
-            <div className="relative">
-              <button
-                onClick={() => setActiveMenu(activeMenu === 'outils' ? null : 'outils')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  activeMenu === 'outils' ? 'bg-slate-100 text-[#0F5B38]' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Outils
-              </button>
-              {activeMenu === 'outils' && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-64 py-2 z-50 text-slate-700 text-xs max-h-[80vh] overflow-y-auto">
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Paramètres')}>
-                    Paramètres...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Sauvegarder la base de données')}>
-                    Sauvegarder la base de données...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Restaurer une base de données')}>
-                    Restaurer une base de données...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Modification')}>
-                    Modification...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Affichage des tables')}>
-                    Affichage des tables...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Gestion des Utilisateurs')}>
-                    Gestion des Utilisateurs...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Inventaires')}>
-                    Inventaires...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Archivage des données')}>
-                    Archivage des données...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Calcul des montants de blocage')}>
-                    Calcul des montants de blocage...
-                  </div>
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Réorganisation des stocks')}>
-                    Réorganisation des stocks...
-                  </div>
-                  <hr className="my-1 border-slate-100" />
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('Imprimante')}>
-                    Imprimante...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ---------- ? (AIDE) ---------- */}
-            <div className="relative">
-              <button
-                onClick={() => setActiveMenu(activeMenu === 'aide' ? null : 'aide')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  activeMenu === 'aide' ? 'bg-slate-100 text-[#0F5B38]' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                ?
-              </button>
-              {activeMenu === 'aide' && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-56 py-2 z-50 text-slate-700 text-xs">
-                  <div className="px-4 py-2 hover:bg-slate-50 cursor-pointer" onClick={() => openPlaceholder('À propos')}>
-                    À propos...
-                  </div>
-                </div>
-              )}
-            </div>
-          </nav>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {loadError && <span className="text-rose-600 font-semibold text-[11px]">⚠ {loadError}</span>}
-          {currentView && (
-            <button
-              onClick={() => setCurrentView(null)}
-              className="text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-3 py-1.5 rounded-xl font-medium transition text-xs flex items-center gap-1.5"
-            >
-              <span>Fermer Vue</span>
-              <span className="font-bold text-xs">✕</span>
-            </button>
-          )}
-          <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full text-[11px] font-medium text-slate-600">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Administrateur</span>
-          </div>
-          <button onClick={onLogout} className="text-slate-400 hover:text-rose-600 font-semibold text-[11px]">
-            Déconnexion
-          </button>
-        </div>
-      </header>
-
-      {/* ==========================================
-          2. HORIZONTAL QUICK ACTION TOOLBAR
-         ========================================== */}
-      <section className="bg-white border-b border-slate-200 px-6 py-2 z-20">
-        <div className="grid grid-cols-4 gap-3 max-w-7xl mx-auto">
-          <button
-            onClick={() => setCurrentView('ACHATS')}
-            className={`flex items-center justify-center gap-2 py-2 px-4 rounded-xl border transition-all text-xs font-bold ${
-              currentView === 'ACHATS'
-                ? 'bg-[#0F5B38] text-white border-[#0F5B38] shadow-sm'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-[#0F5B38]/40'
-            }`}
-          >
-            <span className="text-base">📥</span>
-            <span>Achats des articles</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentView('BONS_PREP')}
-            className={`flex items-center justify-center gap-2 py-2 px-4 rounded-xl border transition-all text-xs font-bold ${
-              currentView === 'BONS_PREP'
-                ? 'bg-[#0F5B38] text-white border-[#0F5B38] shadow-sm'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-[#0F5B38]/40'
-            }`}
-          >
-            <span className="text-base">📋</span>
-            <span>Bons de préparation</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentView('VENTES_VALIDATION')}
-            className={`flex items-center justify-center gap-2 py-2 px-4 rounded-xl border transition-all text-xs font-bold ${
-              currentView === 'VENTES_VALIDATION'
-                ? 'bg-[#0F5B38] text-white border-[#0F5B38] shadow-sm'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-[#0F5B38]/40'
-            }`}
-          >
-            <span className="text-base">💳</span>
-            <span>Ventes &amp; Validation</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentView('PRIX_ARTICLES')}
-            className={`flex items-center justify-center gap-2 py-2 px-4 rounded-xl border transition-all text-xs font-bold ${
-              currentView === 'PRIX_ARTICLES'
-                ? 'bg-[#0F5B38] text-white border-[#0F5B38] shadow-sm'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-[#0F5B38]/40'
-            }`}
-          >
-            <span className="text-base">🏷️</span>
-            <span>Prix unitaires des articles</span>
-          </button>
-        </div>
-      </section>
-
-      {/* ==========================================
-          3. MAIN WORKSPACE / CANVAS AREA
-         ========================================== */}
-      <main className="flex-1 relative overflow-hidden flex flex-col p-6">
-        {currentView === 'PLACEHOLDER' && (
-          <div className="flex-1 flex items-center justify-center z-10">
-            <div className="bg-white border border-slate-200 rounded-2xl p-10 shadow-xs text-center max-w-md">
-              <div className="text-3xl mb-3">🚧</div>
-              <div className="font-extrabold text-slate-900 text-base mb-1">{placeholderLabel}</div>
-              <div className="text-slate-400 text-xs">Ce module n'est pas encore implémenté.</div>
-            </div>
-          </div>
-        )}
+    <AppShell current={currentView} onNavigate={setCurrentView} user={currentUser} onLogout={onLogout}>
 
         {currentView === null && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
@@ -3823,23 +2922,85 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
 
-        {/* ---------- MASTER DATA ---------- */}
-        {currentView === 'MASTER_DATA' && (
-          <MasterDataScreen
-            livreurs={livreurs}
-            zones={zones}
-            chargeClasses={chargeClasses}
-            typeReglements={typeReglements}
+        {/* ---------- MASTER DATA (one screen per reference table) ---------- */}
+        {currentView === 'LIVREURS' && (
+          <ReferenceDataScreen
+            title="Livreurs"
+            description="Agents de livraison rattachés aux bons et aux ventes."
+            endpoint="/livreurs"
+            fields={LIVREUR_FIELDS}
+            rows={livreurs}
+            searchKeys={['code', 'name', 'phone']}
             onRefresh={refreshAll}
           />
         )}
 
-        {currentView === 'DEPOTS' && <DepotsScreen depots={depots} onRefresh={refreshAll} />}
+        {currentView === 'ZONES' && (
+          <ReferenceDataScreen
+            title="Zones"
+            description="Secteurs géographiques utilisés pour regrouper les partenaires."
+            endpoint="/zones"
+            fields={ZONE_FIELDS}
+            rows={zones}
+            searchKeys={['code', 'name']}
+            onRefresh={refreshAll}
+          />
+        )}
 
-        {/* ---------- PRIX ARTICLES ---------- */}
-        {currentView === 'PRIX_ARTICLES' && (
+        {currentView === 'CHARGE_CLASSES' && (
+          <ReferenceDataScreen
+            title="Classes de charges"
+            description="Catégories de dépenses (loyer, transport, salaires...) utilisées par le module Charges."
+            endpoint="/charge-classes"
+            fields={CHARGE_CLASS_FIELDS}
+            rows={chargeClasses}
+            searchKeys={['code', 'label']}
+            onRefresh={refreshAll}
+          />
+        )}
+
+        {currentView === 'TYPE_REGLEMENTS' && (
+          <ReferenceDataScreen
+            title="Types de règlement"
+            description="Conditions de paiement proposées aux partenaires (comptant, 30 jours...)."
+            endpoint="/type-reglements"
+            fields={TYPE_REGLEMENT_FIELDS}
+            rows={typeReglements}
+            searchKeys={['code', 'label']}
+            onRefresh={refreshAll}
+          />
+        )}
+
+        {currentView === 'DEPOTS' && (
+          <ReferenceDataScreen
+            title="Dépôts"
+            description="Emplacements de stockage. Le dépôt par défaut est présélectionné dans les saisies."
+            endpoint="/depots"
+            fields={DEPOT_FIELDS}
+            rows={depots}
+            searchKeys={['code', 'name']}
+            onRefresh={refreshAll}
+          />
+        )}
+
+        {currentView === 'PARTNER_CATEGORIES' && (
+          <ReferenceDataScreen
+            title="Catégories de partenaires"
+            description="Paliers tarifaires. « Fournisseur » détermine si la catégorie apparaît côté achats ou côté ventes."
+            endpoint="/partner-categories"
+            fields={PARTNER_CATEGORY_FIELDS}
+            rows={categories as unknown as (PartnerCategoryOpt & { id: string })[]}
+            searchKeys={['code', 'label']}
+            onRefresh={refreshAll}
+          />
+        )}
+
+        {/* ---------- ARTICLES / PRIX ---------- */}
+        {(currentView === 'PRIX_ARTICLES' || currentView === 'ARTICLES') && (
           <PrixArticlesView articles={articles} categories={categories} depots={depots} />
         )}
+
+        {currentView === 'A_PROPOS' && <AProposScreen />}
 
         {/* ---------- STOCKS ---------- */}
         {currentView === 'STOCKS' && (
@@ -3892,10 +3053,10 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* ---------- REGULES (stock corrections) ---------- */}
-        {currentView === 'REGULES' && (
+        {(currentView === 'REGULES_PLUS' || currentView === 'REGULES_MOINS') && (
           <RegulesScreen
             mode={regulesMode}
-            onModeChange={setRegulesMode}
+            onModeChange={(m) => setCurrentView(m === 'REGULE_PLUS' ? 'REGULES_PLUS' : 'REGULES_MOINS')}
             articles={articles}
             depots={depots}
             documents={documents}
@@ -3909,12 +3070,12 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* ---------- CHÈQUES (recette/dépense) ---------- */}
-        {currentView === 'CHEQUES' && (
+        {(currentView === 'CHEQUES_RECETTE' || currentView === 'CHEQUES_DEPENSE') && (
           <PartnerSettlementScreen
             title="Chèques"
             paymentMode="CHEQUE"
             mode={chequeMode}
-            onModeChange={setChequeMode}
+            onModeChange={(m) => setCurrentView(m === 'RECETTE' ? 'CHEQUES_RECETTE' : 'CHEQUES_DEPENSE')}
             partners={partners}
             transactions={cashTransactions}
             onSaved={refreshAll}
@@ -4319,7 +3480,6 @@ export default function App({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
         )}
-      </main>
 
       {/* ==========================================
           4. MODALS
@@ -4355,6 +3515,6 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           }}
         />
       )}
-    </div>
+    </AppShell>
   );
 }

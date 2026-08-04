@@ -6,7 +6,7 @@ import { config } from './config';
 
 const app = express();
 
-app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin }));
+app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: '2mb' }));
 app.use('/api', api);
 
