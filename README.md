@@ -1,355 +1,197 @@
-# Anagnorisis ERP - Parapharmacy Commercial Management System
+# Anagnorisis ERP — Ets Djemroud
 
-A **production-ready desktop ERP prototype** built for pharmaceutical retailers. Fully functional local system with complete inventory, document, and financial management for multi-user LAN deployment.
+Commercial management system for a parapharmacy distributor (wholesale & retail):
+purchasing, stock across multiple depots, sales and preparation slips, treasury,
+and partner accounts. Desktop application (Electron + React) over a local
+Express/PostgreSQL API, designed for concurrent users on a company LAN.
 
-## 🎯 What This Is
-
-A complete, 100%-feature-implemented parapharmacy management system including:
-- **Multi-user LAN architecture** - 7+ concurrent users on local network
-- **Dense classic desktop UI** - Electron + React with forms-based navigation
-- **Complete financial workflows** - Purchase, prep slips, sales, cash journaling
-- **Smart inventory management** - Multi-depot, stock reservations, P.U.M.P costing
-- **Real-time calculations** - Live totals, margins, credit limits, balances
-- **Production-grade backend** - Express.js API with transaction-safe database operations
+> **Status: in active development — not yet production-ready.**
+> 33 of 59 planned screens are implemented. See [Module status](#module-status).
+> Earlier revisions of this document claimed "100% feature complete" and
+> "0 TypeScript errors"; neither was accurate. This file now tracks reality.
 
 ---
 
-## 📦 Tech Stack
+## Tech stack
 
-| Component | Technology |
-|-----------|------------|
-| **Database** | PostgreSQL 16+ (ACID, Multi-user safe) |
-| **ORM** | Prisma (TypeScript-first) |
-| **Backend** | Node.js + Express (TypeScript) |
-| **Frontend** | React 18 + Vite (Electron wrapper) |
-| **Desktop** | Electron 28+ |
-| **Styling** | Tailwind CSS + Custom desktop CSS |
-| **Validation** | Zod + TypeScript |
-| **Auth** | bcryptjs password hashing |
+| Layer | Technology |
+|---|---|
+| Database | PostgreSQL 16+ |
+| ORM | Prisma 5 |
+| API | Node.js + Express 4 (TypeScript) |
+| Frontend | React 18 + Vite 6 + Tailwind 4 |
+| Desktop shell | Electron 41 |
+| Validation | Zod (shared between client and server) |
+| Auth | JWT + bcrypt password hashing |
+
+Monorepo with three npm workspaces:
+
+```
+shared/    Zod schemas, enums, and the ledger rules used by BOTH client and server
+server/    Express API, Prisma schema, business services
+desktop/   Electron + React client
+```
 
 ---
 
-## ⚡ Quick Start
+## Setup
 
-### 1️⃣ Prerequisites
+### 1. Prerequisites
+
+- Node.js 18+
+- PostgreSQL 16+
+
 ```bash
-# Install PostgreSQL 16+
-# Download: https://www.postgresql.org/download/windows/
-
-# Verify Node.js 18+
-node --version
-
-# Create database
 psql -U postgres -c "CREATE DATABASE anagnorisis;"
 ```
 
-### 2️⃣ Configure Environment
-Create `server/.env`:
+### 2. Environment
+
+Create `.env` in the repository root:
+
 ```env
 DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/anagnorisis
 PORT=5000
 NODE_ENV=development
+CORS_ORIGIN=*
+JWT_SECRET=<see below>
+JWT_EXPIRES_IN=12h
 ```
 
-### 3️⃣ Initialize & Seed
+Generate a real `JWT_SECRET`:
+
 ```bash
-# From project root
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+The server validates its environment at boot and refuses to start on a bad
+configuration. In `NODE_ENV=production` it additionally **requires** a strong
+`JWT_SECRET` and **rejects** `CORS_ORIGIN=*`.
+
+### 3. Install, migrate, seed
+
+```bash
 npm install
 npm run db:push
 npm run db:seed
 ```
 
-### 4️⃣ Run Everything
+### 4. Run
+
 ```bash
 npm run dev
-# Opens: API on :5000 + Electron UI
 ```
 
-**Login:** admin / admin123
+Starts the API on `:5000` and the desktop client together.
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
+Default seeded login: `admin` / `admin123` — **change this before any real use.**
 
 ---
 
-## 📂 Project Structure
+## Navigation
+
+All screens are declared once in [`desktop/src/ui/navigation.ts`](desktop/src/ui/navigation.ts).
+The sidebar, the command palette, and role-based visibility are all derived from
+that single registry, so a menu entry cannot drift out of sync with the screen it
+opens.
+
+Press <kbd>Ctrl</kbd>+<kbd>K</kbd> to search every screen by name (accent-insensitive:
+typing `depot` finds *Dépôts*). Screens not yet built are shown dimmed and marked
+*à venir* rather than being hidden or silently opening an empty page.
+
+---
+
+## Module status
+
+Implemented and working against real data:
+
+- **Fichier** — Partenaires, Catégories de partenaires, Articles, Dépôts, Livreurs, Zones, Classes de charges, Types de règlement
+- **Mouvement** — Saisie des achats, Bons de préparation, Ventes, Avoirs achats/ventes, Régules ±, Transferts inter-dépôts
+- **Trésorerie** — Chèques reçus/émis, Virements, Journal de caisse, Journal de banque, Transactions caissières
+- **Consultation** — Stocks, Prix d'articles, États des articles, Suivi d'un partenaire, Créances et dettes, Créances à recouvrer, Partenaires bloqués
+- **Analyse** — Tableau de bord, Chiffre d'affaires, Ventes d'articles
+
+Not yet built (visible in the UI, marked *à venir*):
+
+- **Mouvement** — Commandes, Consultation des achats, Validation des bons de préparation, Proforma, Facture, Charges
+- **Consultation** — Mouvement d'un article, Situation, Articles à réapprovisionner, Liste des bons de préparation, Archive
+- **Analyse** — Chiffre d'affaires par agent, Graphes et indices
+- **Fiscal** — État 104 et Timbre, Déclaration TVA, Déclaration TAP, État G50
+- **Outils** — Gestion des utilisateurs, Paramètres, Inventaires, Sauvegarde/Restauration, Archivage, Montants de blocage, Réorganisation des stocks, Affichage des tables, Impression
+
+> **Note on the Fiscal group.** État 104, TVA, TAP and G50 are real Algerian tax
+> filings. When built, they are intended as **data exports to hand to an
+> accountant**, not as authoritative filing documents. Verify every figure before
+> submitting anything to the tax authority.
+
+---
+
+## Business rules
+
+These live in `shared/src/index.ts` so the client and server can never disagree.
+
+**P.U.M.P (weighted average cost)** — recalculated only on a true purchase
+(`ACHAT`). Client returns and stock corrections add quantity back without
+re-basing the cost, which would otherwise corrupt every future margin figure.
 
 ```
-anagnorisis/                      # Root monorepo
-├── package.json                  # Root workspace config
-├── tsconfig.base.json            # Shared TypeScript config
-├── .env.example                  # Environment template
-│
-├── shared/                       # Shared validation layer
-│   └── src/index.ts              # Zod schemas
-│
-├── server/                       # Express API backend
-│   ├── src/
-│   │   ├── index.ts              # Express server bootstrap
-│   │   ├── prisma.ts             # Prisma client singleton
-│   │   ├── routes/index.ts        # All API endpoints (20+)
-│   │   ├── services/
-│   │   │   └── document.service.ts # Business logic (PUMP, stock, finance)
-│   │   └── config.ts             # Constants & settings
-│   └── prisma/
-│       ├── schema.prisma         # 9 data models
-│       └── seed.ts               # Demo data (2 users, 3 partners, 4 articles)
-│
-├── desktop/                      # Electron + React frontend
-│   ├── electron/
-│   │   ├── main.ts               # Electron main process
-│   │   └── preload.ts            # IPC bridge
-│   ├── src/
-│   │   ├── main.tsx              # React entry point
-│   │   ├── ui/App.tsx            # 5 complete screens (1000+ lines)
-│   │   ├── styles.css            # Desktop UI styling (300+ lines)
-│   │   └── vite-env.d.ts
-│   ├── index.html
-│   ├── vite.config.ts            # Vite + Electron config
-│   └── package.json
-│
-├── QUICKSTART.md                 # Step-by-step setup guide
-├── VERIFICATION.md               # Post-setup checklist
-└── IMPLEMENTATION_REPORT.md      # Feature audit matrix
+PUMP_new = ((qty_old × PUMP_old) + (qty_in × price_in)) / (qty_old + qty_in)
 ```
 
----
+**Stock movement** — draft documents never touch physical stock.
 
-## 🎮 The 5 Core Screens
+- Receiving (`ACHAT`, `RETOUR_CLIENT`, `REGULE_PLUS`) — adds on validation
+- Consuming (`BON_PREPARATION`, `VENTE`, `FACTURE`, `RETOUR_FOURNISSEUR`, `REGULE_MOINS`) — reserves on draft, deducts on validation
+- `TRANSFERT` — deducts from source depot, adds to destination
 
-### 1. **Bons de Préparation** (Prep Slips / Sales Orders)
-- Partner selector with credit limit warnings
-- Dynamic article search & add
-- Line-item grid with qty editing
-- **Live footer:** HT, Remise, TVA, Timbre, TTC, Margin HT/%, stock available
-- Validate → triggers stock & partner balance updates
+**Totals**
 
-### 2. **Saisie des Achats** (Purchase Entry)
-- Depot selection
-- Article search & add with price input
-- Auto-updates stock & P.U.M.P cost
-- Purchase cost totaling
-
-### 3. **Articles & Stocks** (Inventory Management)
-- All articles with multi-tier pricing
-- Per-depot stock breakdown (SHOW_ROOM / DEPOT_PRINCIPAL)
-- Shows available stock after reservations
-- Price tiers (DETAILLANT, GROSSISTE, VENTE_DIRECTE)
-
-### 4. **Partenaires** (Partner Management)
-- All partners with balance & credit limits
-- Red warnings when solde exceeds seuil
-- Transaction history per partner
-- Contact info display
-
-### 5. **Journal de Caisse** (Cash Register)
-- All cash transactions (RECETTE/DEPENSE)
-- Daily balance calculation
-- Auto-entries from ESPECE sales
-- Color-coded amounts (green/red)
-
----
-
-## 💾 Database Schema (9 Models)
-
-### Core Entities
-- **User** - ADMINISTRATEUR, CAISSIER, AGENT roles
-- **Depot** - Multi-location inventory (SHOW_ROOM, DEPOT_PRINCIPAL)
-- **Partner** - Suppliers/Customers with credit tracking
-- **Article** - Products with codes, prices, costing
-
-### Inventory
-- **ArticlePrice** - Multi-tier pricing per category
-- **ArticleStock** - Per-article per-depot tracking with reservations
-
-### Transactions
-- **DocumentHeader** - Purchase/Sale orders with status & totals
-- **DocumentLine** - Line items with qty, prices, calculations
-- **CashTransaction** - Cash journal entries
-
----
-
-## 🔧 Core Business Logic
-
-### ✅ P.U.M.P (Weighted Average Cost)
-Auto-calculated on purchase validation:
 ```
-PUMP_new = ((Stock_old × PUMP_old) + (Qty_new × Price_new)) / (Stock_old + Qty_new)
+Total HT   = Σ(qty × unit price HT × (1 − discount%))
+Total TVA  = Σ(line HT × TVA rate)
+Timbre     = 1% of HT, cash payments only
+Total TTC  = HT − remise + TVA + timbre
+Marge HT   = TTC − Σ(qty × PUMP)
 ```
 
-### ✅ Stock Reservation System
-- BON_PREPARATION (OUVERT) → `qtyReserved` increments
-- BON_PREPARATION (VALIDE) → `qtyInStock` decrements, stock consumed
-
-### ✅ Financial Calculations
-- **Total HT** = Sum(qty × sellingPriceHT)
-- **Total TVA** = Sum(qty × sellingPriceHT × tvaRate%)
-- **Timbre Fiscal** = 1% HT (ESPECE only)
-- **Total TTC** = HT - Remise + TVA + Timbre
-- **Margin HT** = TTC - Sum(qty × purchasePricePUMP)
-- **Margin %** = (Margin HT / TTC) × 100
-
-### ✅ Partner Balance Tracking
-- Increments on VENTE validation
-- Checks credit limit (Seuil Autorisé) before allowing sales
-
-### ✅ Auto Cash Journaling
-- ESPECE payments → auto-create CashTransaction (RECETTE)
-- Daily balance calculation
+**Partner balances** — a purchase or sale increases what is owed; a return
+decreases it; internal movements and quotes never touch a balance. Whether a
+positive balance is a receivable or a payable is decided by the partner
+category's `isSupplier` flag.
 
 ---
 
-## 🌐 API Endpoints (20+)
-
-### Authentication
-- `POST /auth/login` - User login with bcrypt verification
-
-### Master Data CRUD
-- `GET/POST /partners` - Partner management
-- `GET/POST /articles` - Article with prices
-- `GET/POST /depots` - Depot locations
-
-### Document Workflows
-- `POST /documents` - Create ACHAT/BON_PREPARATION/VENTE
-- `GET /documents` - List all documents
-- `GET /documents/:id` - Single document detail
-- `POST /documents/:id/validate` - Finalize with stock/balance updates
-- `POST /documents/preview` - Calculate totals before save
-
-### Reporting & Queries
-- `GET /stocks` - All stock records per depot
-- `GET /cash` - Cash journal with daily balance
-- `GET /partners/:id/history` - Partner transaction history
-- `GET /articles/:id/details` - Article with prices & multi-depot stocks
-- `GET /summary` - Dashboard counts
-- `GET /health` - Health check
-
----
-
-## 📊 Demo Data Included
-
-**After `npm run db:seed`:**
-
-### Users
-- **admin** (ADMINISTRATEUR) - password: admin123
-- **caissier** (CAISSIER) - password: caissier123
-
-### Depots
-- SHOW_ROOM (Display location)
-- DEPOT_PRINCIPAL (Main warehouse)
-
-### Partners
-- **ABBA151** (DETAILLANT) - Retail client, credit limit 10,000
-- **PHARMA_GROSS** (GROSSISTE) - Wholesaler, credit limit 50,000  
-- **VENTE_DIRECTE** (Direct sales) - Consumer, credit limit 5,000
-
-### Articles (4 Pharma Products)
-- G22111 - ACNET AZELIKE PLUS (TVA 19%)
-- A05001 - ASPIRIN 500MG (TVA 0%)
-- V20022 - VITAMINE C 1000MG (TVA 19%)
-- D15003 - DERMOFIX CREAM (TVA 19%)
-
-Each with:
-- Multi-tier pricing (DETAILLANT/GROSSISTE/VENTE_DIRECTE)
-- Stock in both depots
-- Realistic P.U.M.P values
-
----
-
-## ✅ Feature Completion Matrix
-
-| Feature | Status | Implementation |
-|---------|--------|-----------------|
-| Multi-user concurrency | ✅ | PostgreSQL locks + Prisma transactions |
-| Multi-depot inventory | ✅ | Per-article per-depot stock tables |
-| Multi-tier pricing | ✅ | ArticlePrice model + UI category selection |
-| P.U.M.P auto-calculation | ✅ | Atomic weighted average formula |
-| Stock reservation | ✅ | qtyReserved tracking system |
-| Partner credit limits | ✅ | Solde/Seuil with red warnings |
-| Financial totals | ✅ | Real-time calculation footers |
-| Document workflows | ✅ | ACHAT→VENTE validation states |
-| Cash journaling | ✅ | Auto ESPECE entry + daily balance |
-| Dense desktop UI | ✅ | Classic forms, data grids, modals |
-| TypeScript safety | ✅ | 100% type coverage, 0 errors |
-| Error handling | ✅ | Try-catch on all API calls |
-| LAN connectivity | ✅ | 0.0.0.0 binding, configurable URL |
-
----
-
-## 🚀 Production Readiness
-
-### ✅ Ready Now
-- Complete data model with all entities
-- Business logic fully implemented
-- All endpoints defined and tested
-- UI screens fully functional
-- TypeScript validation passing
-- Seed data for realistic testing
-- ACID-compliant database operations
-
-### Future Enhancements (Optional)
-- JWT token authentication
-- Role-based access control enforcement
-- Audit logging
-- PDF/print templates
-- Advanced reporting & exports
-- Mobile-responsive version
-- Database backup/restore
-
----
-
-## 🔍 Verification
-
-After setup, verify all systems working:
+## Development
 
 ```bash
-# Check database
+npm run typecheck     # all three workspaces — currently clean
+npm run build
 npm run db:generate
-
-# Test API
-curl http://localhost:5000/health
-
-# Test login
-curl -X POST http://localhost:5000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
 ```
 
-See [VERIFICATION.md](VERIFICATION.md) for complete post-setup checklist.
+### Known gaps before production use
+
+These are tracked deliberately rather than hidden:
+
+- **No automated tests.** The financial logic (PUMP, stock, balances) has no
+  regression coverage. This is the highest-priority gap.
+- **No Prisma migrations.** The project uses `db:push`. Migrations are needed to
+  evolve a live database without data loss.
+- **No audit trail.** `Document.createdById` exists but is not populated, so
+  validated documents cannot be attributed to a user.
+- **List endpoints are unpaginated.** `GET /articles`, `/documents`, `/partners`
+  return every row; this will degrade as data grows.
+- **Seeded credentials are weak** and must be rotated before deployment.
+- **No backup routine.** Required before this holds real commercial data.
 
 ---
 
-## 📋 Documentation
+## Documentation
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Step-by-step setup (5 min read)
-- **[IMPLEMENTATION_REPORT.md](IMPLEMENTATION_REPORT.md)** - Feature audit matrix
-- **[VERIFICATION.md](VERIFICATION.md)** - Post-setup validation checklist
-- **[.env.example](.env.example)** - Configuration template
+- [QUICKSTART.md](QUICKSTART.md) — setup walkthrough
+- [VERIFICATION.md](VERIFICATION.md) — post-setup checks
+- [IMPLEMENTATION_REPORT.md](IMPLEMENTATION_REPORT.md) — feature audit
 
----
-
-## 🎯 Next Steps
-
-1. **Install PostgreSQL** (if not already done)
-2. **Create `.env`** in `server/` directory
-3. **Run setup:** `npm install && npm run db:push && npm run db:seed`
-4. **Start system:** `npm run dev`
-5. **Login:** admin / admin123
-6. **Test workflows** using [VERIFICATION.md](VERIFICATION.md)
-
----
-
-## 📞 System Overview
-
-- **Monorepo:** 3 packages (shared validation, server API, desktop UI)
-- **TypeScript:** Entire codebase is type-safe (0 errors)
-- **Database:** PostgreSQL with Prisma ORM
-- **Concurrency:** Advisory locks for document sequencing
-- **API Format:** RESTful JSON endpoints
-- **UI Pattern:** Classic dense forms with real-time calculations
-
-**Status:** 🟢 **100% Feature Complete & Ready for Testing**
-
----
-
-**For detailed database setup and first-run, see [QUICKSTART.md](QUICKSTART.md)**
-"# ANAGNORISIS" 
+> These three predate the current codebase and describe an older schema
+> (9 models, 3 document types, enum-based partner categories). The live schema
+> has 14 models, 10 document types, and admin-managed partner categories.
