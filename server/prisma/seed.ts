@@ -110,6 +110,8 @@ async function main() {
     'company.nif': '',
     'company.ai': '',
     'company.nis': '',
+    'company.nin': '',
+    'company.email': '',
     'print.footer': 'Merci de votre confiance.'
   };
   for (const [key, value] of Object.entries(defaultSettings)) {

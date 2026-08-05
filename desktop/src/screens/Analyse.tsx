@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../services/apiClient';
-import { Badge, Button, Card, DataTable, Input, Screen, money } from '../components/ui';
+import { Button, Card, DataTable, Screen, money } from '../components/ui';
 import { CompanySettings, printHtml } from '../services/print';
 
 // ---------------------------------------------------------------------------
@@ -102,20 +102,17 @@ interface FiscalMonth {
   tvaAPayer: number;
 }
 
-export type FiscalKind = 'TVA' | 'ETAT104' | 'TAP' | 'G50';
+export type FiscalKind = 'TVA' | 'TIMBRE';
 
 const FISCAL_TITLES: Record<FiscalKind, { title: string; description: string }> = {
   TVA: { title: 'Déclaration TVA — document de travail', description: 'TVA collectée sur ventes validées vs TVA déductible sur achats validés.' },
-  ETAT104: { title: 'État 104 et Timbre — document de travail', description: 'Ventes mensuelles et timbre fiscal réellement facturé sur les ventes en espèces.' },
-  TAP: { title: 'Déclaration TAP — document de travail', description: "Chiffre d'affaires mensuel avec TAP calculée au taux choisi." },
-  G50: { title: 'État G50 — document de travail', description: 'Synthèse mensuelle: CA, TVA à payer, timbre et TAP.' }
+  TIMBRE: { title: 'Timbre fiscal encaissé — document de travail', description: 'Timbre réellement facturé sur les ventes réglées en espèces, par mois.' }
 };
 
 export function FiscalScreen({ kind, settings }: { kind: FiscalKind; settings: CompanySettings }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [rows, setRows] = useState<FiscalMonth[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tapRate, setTapRate] = useState('1.5');
 
   useEffect(() => {
     setLoading(true);
@@ -126,7 +123,6 @@ export function FiscalScreen({ kind, settings }: { kind: FiscalKind; settings: C
   }, [year]);
 
   const meta = FISCAL_TITLES[kind];
-  const tap = (Number(tapRate.replace(',', '.')) || 0) / 100;
 
   const columns = useMemo(() => {
     const base = [{ key: 'month', header: 'Mois', render: (r: FiscalMonth) => <span className="font-mono font-bold">{r.month}</span> }];
@@ -148,28 +144,19 @@ export function FiscalScreen({ kind, settings }: { kind: FiscalKind; settings: C
             )
           }
         ];
-      case 'ETAT104':
+      case 'TIMBRE':
         return [
           ...base,
           ca,
-          { key: 'timbre', header: 'Timbre fiscal', align: 'right' as const, render: (r: FiscalMonth) => <span className="font-mono font-bold">{money(r.timbre)}</span> }
-        ];
-      case 'TAP':
-        return [
-          ...base,
-          ca,
-          { key: 'tap', header: `TAP (${tapRate} %)`, align: 'right' as const, render: (r: FiscalMonth) => <span className="font-mono font-bold">{money(r.ventesHT * tap)}</span> }
-        ];
-      case 'G50':
-        return [
-          ...base,
-          ca,
-          { key: 'tva', header: 'TVA à payer', align: 'right' as const, render: (r: FiscalMonth) => <span className="font-mono">{money(r.tvaAPayer)}</span> },
-          { key: 'timbre', header: 'Timbre', align: 'right' as const, render: (r: FiscalMonth) => <span className="font-mono">{money(r.timbre)}</span> },
-          { key: 'tap', header: `TAP (${tapRate} %)`, align: 'right' as const, render: (r: FiscalMonth) => <span className="font-mono">{money(r.ventesHT * tap)}</span> }
+          {
+            key: 'timbre',
+            header: 'Timbre encaissé',
+            align: 'right' as const,
+            render: (r: FiscalMonth) => <span className="font-mono font-bold">{money(r.timbre)}</span>
+          }
         ];
     }
-  }, [kind, tap, tapRate]);
+  }, [kind]);
 
   function printReport() {
     const header = `${settings['company.name'] ?? ''} — NIF ${settings['company.nif'] ?? '—'} — AI ${settings['company.ai'] ?? '—'}`;
@@ -177,9 +164,7 @@ export function FiscalScreen({ kind, settings }: { kind: FiscalKind; settings: C
       .map((r) => {
         const cells: string[] = [r.month, money(r.ventesHT)];
         if (kind === 'TVA') cells.push(money(r.tvaCollectee), money(r.achatsHT), money(r.tvaDeductible), money(r.tvaAPayer));
-        if (kind === 'ETAT104') cells.push(money(r.timbre));
-        if (kind === 'TAP') cells.push(money(r.ventesHT * tap));
-        if (kind === 'G50') cells.push(money(r.tvaAPayer), money(r.timbre), money(r.ventesHT * tap));
+        if (kind === 'TIMBRE') cells.push(money(r.timbre));
         return `<tr>${cells.map((c, i) => `<td style="text-align:${i === 0 ? 'left' : 'right'};padding:4px 8px;border-bottom:1px solid #ddd;font-family:Consolas,monospace">${c}</td>`).join('')}</tr>`;
       })
       .join('');
@@ -201,12 +186,6 @@ export function FiscalScreen({ kind, settings }: { kind: FiscalKind; settings: C
       maxWidth="max-w-4xl"
       actions={
         <div className="flex items-center gap-2">
-          {kind === 'TAP' || kind === 'G50' ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase text-slate-400">Taux TAP %</span>
-              <Input value={tapRate} onChange={(e) => setTapRate(e.target.value)} className="w-16 text-right font-mono py-1" />
-            </div>
-          ) : null}
           <div className="flex gap-1">
             {[year - 1, year, year + 1].map((y) => (
               <button

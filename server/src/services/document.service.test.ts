@@ -209,8 +209,7 @@ describe('validation of a sale', () => {
     expect(Number(cash[0].amount)).toBeCloseTo(1802.85, 6);
   });
 
-  it('applies the legal timbre ceiling on a large cash sale', async () => {
-    // 40 × 200 HT = 8000, TVA 0 → 1% would be 80… use a bigger basket to exceed 2500.
+  it('applies the 2 % timbre bracket on a large cash sale', async () => {
     await prisma.articleStock.update({
       where: { articleId_depotId: { articleId: f.articleB.id, depotId: f.depotMain.id } },
       data: { qtyInStock: 5000 }
@@ -225,9 +224,29 @@ describe('validation of a sale', () => {
     } as never);
 
     const validated = await validateDocument(doc.id);
-    // 400 000 HT → 1% = 4000, clamped to 2500.
-    expect(Number(validated.stampDuty)).toBe(2500);
-    expect(Number(validated.totalTTC)).toBeCloseTo(402500, 6);
+    // 400 000 TTC → tranche « au-delà de 100 000 » → 2 % = 8 000. Aucun plafond.
+    expect(Number(validated.stampDuty)).toBe(8000);
+    expect(Number(validated.totalTTC)).toBeCloseTo(408000, 6);
+  });
+
+  it('applies the 1,5 % bracket between 30 000 and 100 000 DZD', async () => {
+    await prisma.articleStock.update({
+      where: { articleId_depotId: { articleId: f.articleB.id, depotId: f.depotMain.id } },
+      data: { qtyInStock: 5000 }
+    });
+    const doc = await createDocument({
+      type: 'VENTE',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'ESPECE',
+      remise: 0,
+      lines: [lineOf(f.articleB.id, f.depotMain.id, 250, 200, 0)]
+    } as never);
+
+    const validated = await validateDocument(doc.id);
+    // 50 000 TTC → 1,5 % = 750.
+    expect(Number(validated.stampDuty)).toBe(750);
+    expect(Number(validated.totalTTC)).toBeCloseTo(50750, 6);
   });
 
   it('is idempotent — validating twice does not move stock again', async () => {

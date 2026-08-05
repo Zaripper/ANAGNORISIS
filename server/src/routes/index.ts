@@ -14,6 +14,7 @@ import {
   getCAByLivreur,
   getChiffreAffaires,
   getDashboardSummary,
+  getEtat104,
   getFiscalSummary,
   getReorderAlerts,
   getVentesArticles
@@ -155,8 +156,8 @@ api.get('/partners/:id/history', async (req, res) => {
 
 // ---------- Articles ----------
 /** Shared paging: ?limit (≤1000), ?offset, ?q. Defaults keep existing clients working. */
-function paging(req: any, defLimit = 500) {
-  const limit = Math.min(Math.max(Number(req.query.limit) || defLimit, 1), 1000);
+function paging(req: any, defLimit = 20000) {
+  const limit = Math.min(Math.max(Number(req.query.limit) || defLimit, 1), 50000);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   return { limit, offset, q };
@@ -710,6 +711,15 @@ api.get('/reports/ca-livreurs', async (req, res) => {
   try {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 36);
     res.json(await getCAByLivreur(months));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+api.get('/reports/etat-104', async (req, res) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    res.json(await getEtat104(year));
   } catch (error) {
     handleError(res, error);
   }

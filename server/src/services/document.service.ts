@@ -72,6 +72,19 @@ async function nextReference(tx: Tx, type: string) {
   return `${prefix}${String(nextSeq).padStart(6, '0')}`;
 }
 
+/**
+ * Options appliquees a chaque transaction document.
+ *
+ * La generation de reference prend un verrou consultatif par type+annee, donc
+ * des ecritures concurrentes (plusieurs caissiers qui valident en meme temps)
+ * se mettent en file. Les valeurs par defaut de Prisma (maxWait 2 s, timeout
+ * 5 s) font echouer cette file des 3-4 ecritures simultanees avec
+ * "Unable to start a transaction in the given time" -- une erreur visible en
+ * caisse alors que rien n'est anormal. Ces marges laissent la file s'ecouler
+ * sans pour autant masquer un vrai blocage.
+ */
+const TX_OPTIONS = { maxWait: 15000, timeout: 30000 } as const;
+
 interface ComputedLine {
   articleId: string;
   depotId: string;
@@ -120,7 +133,7 @@ export async function buildDocumentPreview(input: CreateDocumentInput) {
     const lines = await computeLines(tx, input.lines);
     const summary = summarize(lines, input.remise, input.paymentMode);
     return { lines, ...summary };
-  });
+  }, TX_OPTIONS);
 }
 
 /**
@@ -199,7 +212,7 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
       },
       include: { lines: true, partner: true, depot: true, destDepot: true }
     });
-  });
+  }, TX_OPTIONS);
 }
 
 /** Replace the lines/totals of a draft (OUVERT) document, re-reserving stock from scratch. */
@@ -258,7 +271,7 @@ export async function updateDraftDocument(documentId: string, input: UpdateDocum
       },
       include: { lines: true, partner: true, depot: true, destDepot: true }
     });
-  });
+  }, TX_OPTIONS);
 }
 
 /** Delete a draft (OUVERT) document entirely, releasing any reservations it held. */
@@ -282,7 +295,7 @@ export async function deleteDraftDocument(documentId: string) {
     await adjustReservations(tx, existing.type as DocumentType, computed, -1);
     await tx.document.delete({ where: { id: documentId } });
     return { id: documentId, deleted: true };
-  });
+  }, TX_OPTIONS);
 }
 
 export async function validateDocument(documentId: string, validatedById?: string) {
@@ -424,7 +437,7 @@ export async function validateDocument(documentId: string, validatedById?: strin
     }
 
     return updated;
-  });
+  }, TX_OPTIONS);
 }
 
 /**
@@ -511,7 +524,7 @@ export async function cancelDocument(documentId: string) {
       data: { status: 'ANNULE', cancelledAt: new Date() },
       include: { lines: true, partner: true, depot: true, destDepot: true }
     });
-  });
+  }, TX_OPTIONS);
 }
 
 /**

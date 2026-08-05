@@ -21,6 +21,7 @@ import { DocumentListScreen, MouvementArticleScreen, ReapproScreen, ValidationQu
 import { SettingsScreen, UsersScreen } from '../screens/Admin';
 import { InventaireScreen } from '../screens/Inventaire';
 import { CALivreursScreen, FiscalScreen } from '../screens/Analyse';
+import { Etat104Screen } from '../screens/Etat104';
 import { GraphesScreen, MontantsBlocageScreen, SituationScreen } from '../screens/Insights';
 import { ArchivageScreen, SauvegardeScreen, TablesScreen } from '../screens/Maintenance';
 import { AccueilScreen } from '../screens/Accueil';
@@ -213,6 +214,9 @@ function viewToDocumentType(view: ERPView): BackendDocumentType {
 function num(v: unknown) {
   return Number(v ?? 0);
 }
+
+/** Taux de TVA en vigueur. Le catalogue mélange les trois. */
+const TVA_RATES = [19, 9, 0];
 
 // ==========================================
 // 3. MODALS (Clean Google Dialog Style)
@@ -2293,12 +2297,14 @@ function NewPartnerModal({
   categories: PartnerCategoryOpt[];
   zones: Zone[];
   onClose: () => void;
-  onSubmit: (data: { code: string; raisonSociale: string; categoryId: string; zoneId?: string | null }) => void;
+  onSubmit: (data: Record<string, unknown>) => void;
 }) {
   const [code, setCode] = useState('');
   const [raisonSociale, setRaisonSociale] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
   const [zoneId, setZoneId] = useState('');
+  // Identifiants fiscaux — requis pour l'État 104 et les mentions de facture.
+  const [fiscal, setFiscal] = useState({ nif: '', rc: '', ai: '', nis: '', nin: '', address: '', phone: '', email: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function submit(e: React.FormEvent) {
@@ -2309,7 +2315,21 @@ function NewPartnerModal({
     if (!categoryId) next.categoryId = 'Sélectionnez une catégorie';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    onSubmit({ code: code.trim().toUpperCase(), raisonSociale: raisonSociale.trim(), categoryId, zoneId: zoneId || null });
+    const clean = (v: string) => (v.trim() ? v.trim() : null);
+    onSubmit({
+      code: code.trim().toUpperCase(),
+      raisonSociale: raisonSociale.trim(),
+      categoryId,
+      zoneId: zoneId || null,
+      address: clean(fiscal.address),
+      phone: clean(fiscal.phone),
+      email: clean(fiscal.email),
+      nif: clean(fiscal.nif),
+      rc: clean(fiscal.rc),
+      ai: clean(fiscal.ai),
+      nis: clean(fiscal.nis),
+      nin: clean(fiscal.nin)
+    });
   }
 
   return (
@@ -2357,6 +2377,43 @@ function NewPartnerModal({
             ))}
           </Select>
         </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Adresse">
+            <Input value={fiscal.address} onChange={(e) => setFiscal({ ...fiscal, address: e.target.value })} />
+          </Field>
+          <Field label="Téléphone">
+            <Input value={fiscal.phone} onChange={(e) => setFiscal({ ...fiscal, phone: e.target.value })} />
+          </Field>
+        </div>
+        <Field label="Email">
+          <Input value={fiscal.email} onChange={(e) => setFiscal({ ...fiscal, email: e.target.value })} />
+        </Field>
+
+        <div className="border-t border-slate-100 pt-3">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">
+            Identifiants fiscaux <span className="font-normal normal-case text-slate-400">— requis pour l'État 104</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="NIF">
+              <Input value={fiscal.nif} onChange={(e) => setFiscal({ ...fiscal, nif: e.target.value })} className="font-mono" />
+            </Field>
+            <Field label="RC">
+              <Input value={fiscal.rc} onChange={(e) => setFiscal({ ...fiscal, rc: e.target.value })} className="font-mono" />
+            </Field>
+            <Field label="AI">
+              <Input value={fiscal.ai} onChange={(e) => setFiscal({ ...fiscal, ai: e.target.value })} className="font-mono" />
+            </Field>
+            <Field label="NIS">
+              <Input value={fiscal.nis} onChange={(e) => setFiscal({ ...fiscal, nis: e.target.value })} className="font-mono" />
+            </Field>
+          </div>
+          <div className="mt-3">
+            <Field label="NIN">
+              <Input value={fiscal.nin} onChange={(e) => setFiscal({ ...fiscal, nin: e.target.value })} className="font-mono" />
+            </Field>
+          </div>
+        </div>
         <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
       </form>
     </Modal>
@@ -2418,6 +2475,20 @@ const PARTNER_CATEGORY_FIELDS: RefField[] = [
   { key: 'label', label: 'Libellé', type: 'text', required: true, placeholder: 'ex: Pharmacies Réseau Sud' },
   { key: 'isSupplier', label: 'Catégorie fournisseur (achats)', type: 'boolean', badgeLabel: 'Fournisseur' }
 ];
+
+/** Écran honnête pour un module annoncé mais pas encore construit. */
+function NotImplementedScreen({ label }: { label: string }) {
+  return (
+    <Screen title={label} description="Module prévu, pas encore disponible." maxWidth="max-w-xl">
+      <Card>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Cet écran n&apos;est pas encore développé. En attendant, les montants nécessaires (TVA collectée et déductible, timbre encaissé,
+          chiffre d&apos;affaires) sont disponibles dans <b>Déclaration TVA</b> et <b>Timbre fiscal encaissé</b>.
+        </p>
+      </Card>
+    </Screen>
+  );
+}
 
 function AProposScreen() {
   return (
@@ -2503,6 +2574,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
             partnerName: doc.partner?.raisonSociale ?? null,
             partnerCode: doc.partner?.code ?? null,
             partnerAddress: doc.partner?.address ?? null,
+            partnerFiscal: doc.partner
+              ? { nif: doc.partner.nif, rc: doc.partner.rc, ai: doc.partner.ai, nis: doc.partner.nis, nin: doc.partner.nin, email: doc.partner.email }
+              : null,
             paymentMode: doc.paymentMode,
             totalHT: num(doc.totalHT),
             remise: num(doc.remise),
@@ -2530,13 +2604,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   async function refreshAll() {
     try {
       const [partnersRes, categoriesRes, zonesRes, livreursRes, chargeClassesRes, typeReglementsRes, articlesRes, depotsRes, documentsRes, cashRes] = await Promise.all([
-        apiRequest<any[]>('/partners'),
+        apiRequest<any[]>('/partners?limit=50000'),
         apiRequest<PartnerCategoryOpt[]>('/partner-categories'),
         apiRequest<Zone[]>('/zones'),
         apiRequest<Livreur[]>('/livreurs'),
         apiRequest<ChargeClass[]>('/charge-classes'),
         apiRequest<TypeReglement[]>('/type-reglements'),
-        apiRequest<any[]>('/articles'),
+        apiRequest<any[]>('/articles?limit=50000'),
         apiRequest<Depot[]>('/depots'),
         apiRequest<DocumentRow[]>('/documents'),
         apiRequest<{ transactions: CashTransaction[]; totalBalance: number }>('/cash')
@@ -2683,6 +2757,15 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         return l;
       })
     );
+  };
+
+  /**
+   * Le taux de TVA est proposé depuis la fiche article, mais reste modifiable sur
+   * chaque ligne: le catalogue mélange des produits à 19 %, 9 % et 0 %, et le taux
+   * applicable peut différer selon l'opération.
+   */
+  const handleUpdateLineTva = (id: string, tvaRate: number) => {
+    setLines(lines.map((l) => (l.id === id ? { ...l, tvaRate } : l)));
   };
 
   const handleRemoveLine = (id: string) => {
@@ -3120,9 +3203,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {/* ---------- ANALYSE / FISCAL ---------- */}
         {currentView === 'CHIFFRE_AFFAIRES_AGENT' && <CALivreursScreen />}
         {currentView === 'DECLARATION_TVA' && <FiscalScreen kind="TVA" settings={settings} />}
-        {currentView === 'ETAT_104' && <FiscalScreen kind="ETAT104" settings={settings} />}
-        {currentView === 'DECLARATION_TAP' && <FiscalScreen kind="TAP" settings={settings} />}
-        {currentView === 'ETAT_G50' && <FiscalScreen kind="G50" settings={settings} />}
+        {currentView === 'ETAT_104_LISTE' && <FiscalScreen kind="TIMBRE" settings={settings} />}
+        {currentView === 'ETAT_104' && <Etat104Screen settings={settings} />}
+        {currentView === 'ETAT_G50' && <NotImplementedScreen label="État G50" />}
 
         {/* ---------- OUTILS ---------- */}
         {currentView === 'UTILISATEURS' && <UsersScreen currentUserId={currentUser?.id} />}
@@ -3494,7 +3577,24 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                           <td className="p-3 text-right font-mono font-semibold text-slate-800">{line.prixVente.toFixed(2)}</td>
                           <td className="p-3 text-right font-mono font-bold text-slate-900">{line.montantHT.toFixed(2)}</td>
                           <td className="p-3 text-center">
-                            <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono text-[10px]">{line.tvaRate}%</span>
+                            {isReadOnly ? (
+                              <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono text-[10px]">{line.tvaRate}%</span>
+                            ) : (
+                              /* Le taux vient de la fiche article mais reste modifiable ligne par ligne:
+                                 le catalogue mélange des produits à 19 %, 9 % et 0 %. */
+                              <select
+                                value={line.tvaRate}
+                                onChange={(e) => handleUpdateLineTva(line.id, Number(e.target.value))}
+                                className="border border-slate-200 rounded-lg px-1.5 py-1 font-mono text-[11px] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                                aria-label={`Taux de TVA pour ${line.code}`}
+                              >
+                                {TVA_RATES.map((r) => (
+                                  <option key={r} value={r}>
+                                    {r}%
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             {!isReadOnly && (
@@ -3651,7 +3751,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           zones={zones}
           onClose={() => setShowNewPartnerModal(false)}
           onSubmit={(data) => {
-            handleAddPartner(data);
+            handleAddPartner(data as never);
             setShowNewPartnerModal(false);
           }}
         />

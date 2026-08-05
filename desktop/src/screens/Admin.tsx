@@ -212,10 +212,12 @@ const SETTING_FIELDS: { key: string; label: string; hint?: string }[] = [
   { key: 'company.activity', label: 'Activité' },
   { key: 'company.address', label: 'Adresse' },
   { key: 'company.phone', label: 'Téléphone' },
+  { key: 'company.email', label: 'Email' },
   { key: 'company.rc', label: 'Registre de commerce (RC)' },
   { key: 'company.nif', label: 'NIF' },
   { key: 'company.ai', label: 'Article d’imposition (AI)' },
   { key: 'company.nis', label: 'NIS' },
+  { key: 'company.nin', label: "NIN (n° d'identification nationale)" },
   { key: 'print.footer', label: 'Pied de page des impressions', hint: 'Affiché en bas des factures et tickets.' }
 ];
 

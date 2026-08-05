@@ -87,8 +87,8 @@ export type ScreenId =
   // Fiscal
   | 'ETAT_104'
   | 'DECLARATION_TVA'
-  | 'DECLARATION_TAP'
   | 'ETAT_G50'
+  | 'ETAT_104_LISTE'
   // Réglages
   | 'PARAMETRES'
   | 'UTILISATEURS'
@@ -221,8 +221,8 @@ export const SCREENS: ScreenDef[] = [
 
   // ---------- Fiscal ----------
   { id: 'DECLARATION_TVA', label: 'Déclaration TVA', group: 'Fiscal', keywords: 'taxe valeur ajoutee' },
-  { id: 'ETAT_104', label: 'État 104 & Timbre', group: 'Fiscal', keywords: 'impot timbre fiscal' },
-  { id: 'DECLARATION_TAP', label: 'Déclaration TAP', group: 'Fiscal', keywords: 'taxe activite professionnelle' },
+  { id: 'ETAT_104', label: 'État 104 — relevé clients', group: 'Fiscal', keywords: 'releve clients annuel nif declaration' },
+  { id: 'ETAT_104_LISTE', label: 'Timbre fiscal encaissé', group: 'Fiscal', keywords: 'timbre 104 especes' },
   { id: 'ETAT_G50', label: 'État G50', group: 'Fiscal', keywords: 'declaration mensuelle synthese' },
 
   // ---------- Réglages ----------

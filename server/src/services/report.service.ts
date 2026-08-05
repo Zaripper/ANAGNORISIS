@@ -347,3 +347,64 @@ export async function getFiscalSummary(year: number) {
 
   return months.map((m) => ({ ...m, tvaAPayer: m.tvaCollectee - m.tvaDeductible }));
 }
+
+/**
+ * État 104 — relevé annuel des clients.
+ *
+ * Un client par ligne, avec ses identifiants fiscaux et le total de ses achats
+ * (ventes validées nettes des avoirs) sur l'exercice. Aucun seuil d'exclusion:
+ * tous les clients ayant réalisé des opérations sont listés.
+ */
+export async function getEtat104(year: number) {
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 0, 1);
+
+  const docs = await prisma.document.findMany({
+    where: {
+      status: 'VALIDE',
+      validatedAt: { gte: start, lt: end },
+      type: { in: [...SALE_TYPES, 'RETOUR_CLIENT'] as any },
+      partnerId: { not: null }
+    },
+    select: {
+      type: true,
+      totalHT: true,
+      totalTVA: true,
+      totalTTC: true,
+      partner: {
+        select: {
+          id: true, code: true, raisonSociale: true, address: true, email: true,
+          nif: true, rc: true, ai: true, nis: true, nin: true,
+          category: { select: { isSupplier: true } }
+        }
+      }
+    }
+  });
+
+  const byPartner = new Map<string, any>();
+
+  for (const doc of docs) {
+    const p = doc.partner!;
+    if (p.category.isSupplier) continue; // l'État 104 ne concerne que les clients
+    const sign = doc.type === 'RETOUR_CLIENT' ? -1 : 1;
+    const entry = byPartner.get(p.id) ?? {
+      partnerId: p.id, code: p.code, raisonSociale: p.raisonSociale,
+      address: p.address, email: p.email,
+      nif: p.nif, rc: p.rc, ai: p.ai, nis: p.nis, nin: p.nin,
+      montantHT: 0, montantTVA: 0, montantTTC: 0, operations: 0
+    };
+    entry.montantHT += sign * Number(doc.totalHT);
+    entry.montantTVA += sign * Number(doc.totalTVA);
+    entry.montantTTC += sign * Number(doc.totalTTC);
+    entry.operations += 1;
+    byPartner.set(p.id, entry);
+  }
+
+  return Array.from(byPartner.values())
+    .map((e) => ({
+      ...e,
+      // Signale les lignes inexploitables telles quelles pour la déclaration.
+      identifiantsManquants: (['nif', 'rc', 'ai', 'nis', 'nin'] as const).filter((k) => !e[k])
+    }))
+    .sort((a, b) => b.montantTTC - a.montantTTC);
+}

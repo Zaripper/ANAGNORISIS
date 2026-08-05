@@ -22,6 +22,15 @@ export interface PrintLine {
   totalHT: number;
 }
 
+export interface PartnerFiscal {
+  nif?: string | null;
+  rc?: string | null;
+  ai?: string | null;
+  nis?: string | null;
+  nin?: string | null;
+  email?: string | null;
+}
+
 export interface PrintDoc {
   reference: string;
   type: string;
@@ -29,6 +38,7 @@ export interface PrintDoc {
   partnerName?: string | null;
   partnerCode?: string | null;
   partnerAddress?: string | null;
+  partnerFiscal?: PartnerFiscal | null;
   paymentMode: string;
   totalHT: number;
   remise: number;
@@ -127,12 +137,28 @@ export function amountInWordsDZD(amount: number): string {
 // ---------------------------------------------------------------------------
 // Templates
 // ---------------------------------------------------------------------------
+/** Identifiants fiscaux du client, requis notamment pour l'État 104. */
+function partnerIds(f?: PartnerFiscal | null): string {
+  if (!f) return '';
+  return [
+    f.nif && `NIF: ${esc(f.nif)}`,
+    f.rc && `RC: ${esc(f.rc)}`,
+    f.ai && `AI: ${esc(f.ai)}`,
+    f.nis && `NIS: ${esc(f.nis)}`,
+    f.nin && `NIN: ${esc(f.nin)}`
+  ]
+    .filter(Boolean)
+    .join(' — ');
+}
+
 function companyHeader(company: CompanySettings): string {
+  // Mentions légales obligatoires sur toute facture (hors capital social).
   const idLine = [
     company['company.rc'] && `RC: ${esc(company['company.rc'])}`,
     company['company.nif'] && `NIF: ${esc(company['company.nif'])}`,
     company['company.ai'] && `AI: ${esc(company['company.ai'])}`,
-    company['company.nis'] && `NIS: ${esc(company['company.nis'])}`
+    company['company.nis'] && `NIS: ${esc(company['company.nis'])}`,
+    company['company.nin'] && `NIN: ${esc(company['company.nin'])}`
   ]
     .filter(Boolean)
     .join(' — ');
@@ -142,6 +168,7 @@ function companyHeader(company: CompanySettings): string {
       <div class="co-sub">${esc(company['company.activity'] || '')}</div>
       ${company['company.address'] ? `<div class="co-sub">${esc(company['company.address'])}</div>` : ''}
       ${company['company.phone'] ? `<div class="co-sub">Tél: ${esc(company['company.phone'])}</div>` : ''}
+      ${company['company.email'] ? `<div class="co-sub">${esc(company['company.email'])}</div>` : ''}
       ${idLine ? `<div class="co-ids">${idLine}</div>` : ''}
     </div>`;
 }
@@ -184,6 +211,7 @@ export function invoiceHtml(doc: PrintDoc, company: CompanySettings): string {
     .party { border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; min-width: 220px; }
     .party .t { font-size: 9px; text-transform: uppercase; color: #777; font-weight: 700; margin-bottom: 3px; }
     .party .n { font-weight: 700; }
+    .party-ids { margin-top: 3px; font-size: 9px; color: #555; }
     table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; }
     table.lines th { background: #0F5B38; color: #fff; padding: 5px 6px; font-size: 10px; text-align: left; }
     table.lines td { border-bottom: 1px solid #e5e5e5; padding: 4px 6px; }
@@ -216,6 +244,8 @@ export function invoiceHtml(doc: PrintDoc, company: CompanySettings): string {
              <div class="n">${esc(doc.partnerName)}</div>
              ${doc.partnerCode ? `<div class="mono">${esc(doc.partnerCode)}</div>` : ''}
              ${doc.partnerAddress ? `<div>${esc(doc.partnerAddress)}</div>` : ''}
+             ${doc.partnerFiscal?.email ? `<div>${esc(doc.partnerFiscal.email)}</div>` : ''}
+             ${partnerIds(doc.partnerFiscal) ? `<div class="party-ids">${partnerIds(doc.partnerFiscal)}</div>` : ''}
            </div></div>`
         : ''
     }

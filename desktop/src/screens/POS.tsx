@@ -173,9 +173,22 @@ export function POSScreen({
   const tenderedNum = Number(tendered.replace(',', '.')) || 0;
   const change = tenderedNum - totals.totalTTC;
 
-  async function pay() {
+  /**
+   * `mode === 'CREDIT'` : vente portée au compte du client, sans encaissement
+   * immédiat — le solde client est débité et aucune écriture de caisse n'est
+   * générée. Sinon on encaisse selon le mode de règlement sélectionné.
+   */
+  async function pay(mode: PaymentMode | 'CREDIT' = paymentMode) {
     if (cart.length === 0 || !client || !depotId || paying) return;
-    if (paymentMode === 'ESPECE' && tendered !== '' && tenderedNum < totals.totalTTC) {
+    const credit = mode === 'CREDIT';
+    // Une vente à crédit doit être imputée à un client identifié, pas au comptoir.
+    if (credit && client.code === 'COMPTOIR') {
+      toasts.error('Sélectionnez un client identifié pour une vente à crédit.');
+      return;
+    }
+    // Le crédit est enregistré en TRAITE : pas de mouvement de caisse, pas de timbre.
+    const effectiveMode: PaymentMode = credit ? 'TRAITE' : (mode as PaymentMode);
+    if (!credit && effectiveMode === 'ESPECE' && tendered !== '' && tenderedNum < totals.totalTTC) {
       toasts.error('Montant reçu insuffisant.');
       return;
     }
@@ -187,7 +200,7 @@ export function POSScreen({
           type: 'VENTE',
           partnerId: client.id,
           depotId,
-          paymentMode,
+          paymentMode: effectiveMode,
           remise: 0,
           lines: cart.map((l) => ({
             articleId: l.articleId,
@@ -208,7 +221,7 @@ export function POSScreen({
             type: 'VENTE',
             date: new Date(),
             partnerName: client.raisonSociale,
-            paymentMode,
+            paymentMode: effectiveMode,
             totalHT: totals.totalHT,
             remise: 0,
             totalTVA: totals.totalTVA,
@@ -227,13 +240,15 @@ export function POSScreen({
           settings,
           {
             cashier: cashierName,
-            cashReceived: paymentMode === 'ESPECE' && tendered !== '' ? tenderedNum : undefined,
-            change: paymentMode === 'ESPECE' && tendered !== '' ? Math.max(change, 0) : undefined
+            cashReceived: !credit && effectiveMode === 'ESPECE' && tendered !== '' ? tenderedNum : undefined,
+            change: !credit && effectiveMode === 'ESPECE' && tendered !== '' ? Math.max(change, 0) : undefined
           }
         )
       );
 
-      toasts.success(`Vente ${validated.reference} encaissée.`);
+      toasts.success(
+        credit ? `Vente ${validated.reference} portée au compte de ${client.raisonSociale}.` : `Vente ${validated.reference} encaissée.`
+      );
       commitCart([]);
       setTendered('');
       await onSaved();
@@ -245,12 +260,16 @@ export function POSScreen({
     }
   }
 
-  // F9 = encaisser, from anywhere on the screen.
+  // Raccourcis repris du logiciel actuel : F8 encaisse en espèces, F6 vend à crédit.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'F9') {
+      if (e.key === 'F8') {
         e.preventDefault();
-        pay();
+        setPaymentMode('ESPECE');
+        pay('ESPECE');
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        pay('CREDIT');
       }
     }
     window.addEventListener('keydown', onKey);
@@ -462,13 +481,22 @@ export function POSScreen({
           </div>
 
           <button
-            onClick={pay}
+            onClick={() => pay()}
             disabled={cart.length === 0 || paying}
             className="w-full bg-[#0F5B38] hover:bg-[#0b462b] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-2xl py-3.5 text-sm flex items-center justify-center gap-2 shadow-md shadow-[#0F5B38]/20 transition-all duration-150 active:scale-[0.99]"
           >
             <Printer className="w-4 h-4" />
             {paying ? 'Encaissement…' : 'Encaisser · imprimer'}
-            <kbd className="ml-1 text-[9px] font-mono bg-white/15 rounded px-1.5 py-0.5">F9</kbd>
+            <kbd className="ml-1 text-[9px] font-mono bg-white/15 rounded px-1.5 py-0.5">F8</kbd>
+          </button>
+          <button
+            onClick={() => pay('CREDIT')}
+            disabled={cart.length === 0 || paying}
+            title="Porte la vente au compte du client, sans encaissement immédiat"
+            className="w-full mt-1.5 bg-white border border-[#0F5B38]/30 text-[#0F5B38] hover:bg-[#0F5B38]/5 disabled:opacity-40 disabled:cursor-not-allowed font-bold rounded-2xl py-2.5 text-xs flex items-center justify-center gap-2 transition"
+          >
+            Vente à crédit
+            <kbd className="text-[9px] font-mono bg-slate-100 rounded px-1.5 py-0.5">F6</kbd>
           </button>
         </div>
       </div>

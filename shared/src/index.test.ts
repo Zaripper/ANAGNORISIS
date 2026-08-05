@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TIMBRE_MAX,
-  TIMBRE_MIN,
+  TIMBRE_SEUIL_MIN,
   computeDocTotals,
   documentTypes,
   fiscalStamp,
@@ -78,27 +77,47 @@ describe('ledgerEffect', () => {
   });
 });
 
-describe('fiscalStamp (timbre fiscal)', () => {
-  it('applies only to cash payments', () => {
+describe('fiscalStamp — barème progressif par tranche', () => {
+  it("ne s'applique qu'aux règlements en espèces", () => {
     expect(fiscalStamp(10000, 'CHEQUE')).toBe(0);
     expect(fiscalStamp(10000, 'VIREMENT')).toBe(0);
     expect(fiscalStamp(10000, 'TRAITE')).toBe(0);
     expect(fiscalStamp(10000, 'ESPECE')).toBe(100);
   });
 
-  it('is 1% of the pre-stamp TTC', () => {
-    expect(fiscalStamp(123456, 'ESPECE')).toBe(1234.56);
+  it('aucun timbre en dessous de 300 DZD', () => {
+    expect(fiscalStamp(299.99, 'ESPECE')).toBe(0);
+    expect(fiscalStamp(1, 'ESPECE')).toBe(0);
   });
 
-  it('clamps to the legal floor of 5 DZD on small cash sales', () => {
-    expect(fiscalStamp(120, 'ESPECE')).toBe(TIMBRE_MIN); // 1% would be 1.20
+  it('1 % de 300 à 30 000 DZD', () => {
+    expect(fiscalStamp(300, 'ESPECE')).toBe(3);
+    expect(fiscalStamp(29999, 'ESPECE')).toBeCloseTo(299.99, 6);
   });
 
-  it('clamps to the legal ceiling of 2500 DZD on large cash sales', () => {
-    expect(fiscalStamp(1_000_000, 'ESPECE')).toBe(TIMBRE_MAX); // 1% would be 10 000
+  it('1,5 % de 30 000 à 100 000 DZD', () => {
+    expect(fiscalStamp(30000, 'ESPECE')).toBe(450);
+    expect(fiscalStamp(99999, 'ESPECE')).toBeCloseTo(1499.99, 6);
   });
 
-  it('never charges a stamp on a zero or negative total', () => {
+  it('2 % au-delà de 100 000 DZD', () => {
+    expect(fiscalStamp(100000, 'ESPECE')).toBe(2000);
+    expect(fiscalStamp(1000000, 'ESPECE')).toBe(20000);
+  });
+
+  it('le taux de la tranche porte sur la totalité du montant, pas sur la fraction', () => {
+    // 30 000 franchit la tranche: 1,5 % de 30 000 = 450, et non 1 % de 30 000 + marginal.
+    expect(fiscalStamp(30000, 'ESPECE')).toBe(450);
+    expect(fiscalStamp(29999.99, 'ESPECE')).toBeLessThan(450);
+  });
+
+  it('le barème est continu et croissant aux bornes', () => {
+    expect(fiscalStamp(TIMBRE_SEUIL_MIN, 'ESPECE')).toBeGreaterThan(fiscalStamp(TIMBRE_SEUIL_MIN - 0.01, 'ESPECE'));
+    expect(fiscalStamp(30000, 'ESPECE')).toBeGreaterThan(fiscalStamp(29999.99, 'ESPECE'));
+    expect(fiscalStamp(100000, 'ESPECE')).toBeGreaterThan(fiscalStamp(99999.99, 'ESPECE'));
+  });
+
+  it('aucun timbre sur un total nul ou négatif', () => {
     expect(fiscalStamp(0, 'ESPECE')).toBe(0);
     expect(fiscalStamp(-50, 'ESPECE')).toBe(0);
   });
@@ -109,7 +128,7 @@ describe('computeDocTotals', () => {
     const totals = computeDocTotals([line({ quantity: 2, unitPriceHT: 1000, tvaRate: 19, purchaseCostPUMP: 700 })], 0, 'ESPECE');
     expect(totals.totalHT).toBe(2000);
     expect(totals.totalTVA).toBeCloseTo(380, 6);
-    // pre-stamp TTC 2380 → stamp 23.80
+    // TTC avant timbre 2380 → tranche 1 % → 23,80
     expect(totals.stampDuty).toBeCloseTo(23.8, 6);
     expect(totals.totalTTC).toBeCloseTo(2403.8, 6);
     expect(totals.marginHT).toBe(600); // 2000 - 2*700
@@ -136,9 +155,16 @@ describe('computeDocTotals', () => {
 
   it('deducts the global remise before computing the stamp', () => {
     const totals = computeDocTotals([line({ unitPriceHT: 10000, tvaRate: 0 })], 1000, 'ESPECE');
-    // pre-stamp TTC = 10000 - 1000 = 9000 → stamp 90
+    // TTC avant timbre = 10000 - 1000 = 9000 → tranche 1 % → 90
     expect(totals.stampDuty).toBeCloseTo(90, 6);
     expect(totals.totalTTC).toBeCloseTo(9090, 6);
+  });
+
+  it('la remise peut faire basculer la vente dans une tranche de timbre inférieure', () => {
+    const sans = computeDocTotals([line({ unitPriceHT: 31000, tvaRate: 0 })], 0, 'ESPECE');
+    const avec = computeDocTotals([line({ unitPriceHT: 31000, tvaRate: 0 })], 2000, 'ESPECE');
+    expect(sans.stampDuty).toBeCloseTo(465, 6); // 31 000 → 1,5 %
+    expect(avec.stampDuty).toBeCloseTo(290, 6); // 29 000 → 1 %
   });
 
   it('margin can go negative when selling under cost — it must not be masked', () => {

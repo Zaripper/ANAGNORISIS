@@ -86,13 +86,40 @@ export function clamp(value: number, min: number, max: number) {
 // and the POS) compute through these functions, so a displayed total can never
 // disagree with what gets stored.
 
-export const TIMBRE_MIN = 5.0;
-export const TIMBRE_MAX = 2500.0;
+/**
+ * Droit de timbre — barème progressif par tranche, confirmé par le comptable
+ * (2026). Le taux de la tranche s'applique à la TOTALITÉ du montant TTC, il ne
+ * s'agit pas d'un calcul marginal.
+ *
+ *   < 300 DZD            aucun timbre
+ *   300 – 30 000 DZD     1,0 %
+ *   30 000 – 100 000 DZD 1,5 %
+ *   > 100 000 DZD        2,0 %
+ *
+ * Le timbre ne s'applique qu'aux règlements en espèces, et se calcule sur le
+ * TTC (contrairement à la TVA qui se calcule sur le HT).
+ */
+export const TIMBRE_SEUIL_MIN = 300;
 
-/** Algerian timbre fiscal: 1% of the pre-stamp TTC, cash payments only, clamped to [5, 2500] DZD. */
+export const TIMBRE_BRACKETS: { upTo: number; rate: number }[] = [
+  { upTo: TIMBRE_SEUIL_MIN, rate: 0 },
+  { upTo: 30000, rate: 0.01 },
+  { upTo: 100000, rate: 0.015 },
+  { upTo: Number.POSITIVE_INFINITY, rate: 0.02 }
+];
+
+/** Taux de timbre applicable à un montant TTC donné. */
+export function timbreRate(preStampTotalTTC: number): number {
+  for (const bracket of TIMBRE_BRACKETS) {
+    if (preStampTotalTTC < bracket.upTo) return bracket.rate;
+  }
+  return TIMBRE_BRACKETS[TIMBRE_BRACKETS.length - 1].rate;
+}
+
+/** Droit de timbre: espèces uniquement, assis sur le TTC, arrondi au centime. */
 export function fiscalStamp(preStampTotalTTC: number, paymentMode: PaymentMode): number {
   if (paymentMode !== 'ESPECE' || preStampTotalTTC <= 0) return 0;
-  return clamp(Math.round(preStampTotalTTC * 0.01 * 100) / 100, TIMBRE_MIN, TIMBRE_MAX);
+  return Math.round(preStampTotalTTC * timbreRate(preStampTotalTTC) * 100) / 100;
 }
 
 export interface TotalsLine {
@@ -158,6 +185,13 @@ export const createPartnerSchema = z.object({
   zoneId: z.string().uuid().optional().nullable(),
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  // Identifiants fiscaux repris sur les factures et dans l'État 104.
+  nif: z.string().optional().nullable(),
+  rc: z.string().optional().nullable(),
+  ai: z.string().optional().nullable(),
+  nis: z.string().optional().nullable(),
+  nin: z.string().optional().nullable(),
   seuilAutorise: z.number().nonnegative().default(0)
 });
 export type CreatePartnerInput = z.infer<typeof createPartnerSchema>;

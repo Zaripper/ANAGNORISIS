@@ -157,6 +157,13 @@ model Partner {
   balance          Decimal           @default(0.0)
   address          String?
   phone            String?
+  email            String?
+  /// Identifiants fiscaux — obligatoires pour l'État 104 et les mentions de facture.
+  nif              String?
+  rc               String?
+  ai               String?
+  nis              String?
+  nin              String?
   active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
