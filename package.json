@@ -17,7 +17,8 @@
     "typecheck": "npm run typecheck --workspaces",
     "db:generate": "npm run prisma:generate --workspace server",
     "db:push": "npm run prisma:push --workspace server",
-    "db:seed": "npm run prisma:seed --workspace server"
+    "db:seed": "npm run prisma:seed --workspace server",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

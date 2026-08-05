@@ -208,9 +208,22 @@ npm run db:generate
   admin-reset password are forced to choose a new one at login before entering
   the app (the seeded `admin`/`caissier` accounts are flagged).
 
-Remaining known gap, tracked deliberately: the Prisma-backed services
-(validation, PUMP recalculation) have no automated integration tests yet — the
-shared financial core does (`npm test -w shared`, 20 tests).
+### Tests
+
+```bash
+npm test                 # all workspaces
+npm test -w shared       # 20 unit tests: totals, timbre clamping, ledger direction
+npm test -w server       # 26 integration tests against a real Postgres schema
+```
+
+The server suite runs against your configured database in a dedicated
+`erp_test` schema (never `public`), applying the committed migrations first —
+so it also proves the migration files can build a database from scratch. It
+covers the code paths that move money and stock: reservation lifecycle and
+overselling refusal, validation effects per document type, P.U.M.P
+recalculation (and the rule that returns/régules must *not* re-base it),
+inter-depot transfers, cancellation reversal, purchase-order reception, and
+reference sequencing under concurrent writers.
 
 ---
 

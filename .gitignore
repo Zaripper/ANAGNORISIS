@@ -16,3 +16,5 @@ desktop/out
 # NOTE: server/prisma/migrations is intentionally NOT ignored.
 # Migrations are schema version history and must be committed so production
 # databases can be evolved without data loss (`prisma migrate deploy`).
+
+# Integration tests use a dedicated erp_test schema in the dev database
