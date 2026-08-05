@@ -296,7 +296,7 @@ export function AppShell({
   const isHome = current === HOME_SCREEN;
 
   useEffect(() => {
-    if (screen && screen.group !== activeModule) setActiveModule(screen.group);
+    if (screen && screen.group !== 'Accueil' && screen.group !== activeModule) setActiveModule(screen.group);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 
@@ -323,17 +323,19 @@ export function AppShell({
     <div className="flex h-screen w-screen bg-[#F6F5F1] text-slate-800 font-sans text-xs overflow-hidden">
       <Rail activeModule={activeModule} isHome={isHome} onModule={openModule} onHome={() => onNavigate(HOME_SCREEN)} role={user?.role} />
 
-      <ModulePanel module={activeModule} current={current} onSelect={onNavigate} role={user?.role} collapsed={panelCollapsed} />
+      {!isHome && <ModulePanel module={activeModule} current={current} onSelect={onNavigate} role={user?.role} collapsed={panelCollapsed} />}
 
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="h-12 shrink-0 bg-white border-b border-slate-200 px-4 flex items-center gap-3">
-          <button
-            onClick={() => setPanelCollapsed((c) => !c)}
-            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-            aria-label={panelCollapsed ? 'Afficher le panneau' : 'Masquer le panneau'}
-          >
-            {panelCollapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
-          </button>
+          {!isHome && (
+            <button
+              onClick={() => setPanelCollapsed((c) => !c)}
+              className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+              aria-label={panelCollapsed ? 'Afficher le panneau' : 'Masquer le panneau'}
+            >
+              {panelCollapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
+            </button>
+          )}
 
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 min-w-0 text-[13px]">

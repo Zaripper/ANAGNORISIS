@@ -1,6 +1,7 @@
 import type { UserRole } from '@anagnorisis/shared';
 import {
   BarChart3,
+  ScanBarcode,
   Boxes,
   Landmark,
   LayoutDashboard,
@@ -26,8 +27,11 @@ import {
  */
 
 export type ScreenId =
-  // Ventes
+  // Accueil
+  | 'ACCUEIL'
+  // Caisse (module autonome)
   | 'CAISSE_POS'
+  // Ventes
   | 'BONS_PREP'
   | 'VENTES_VALIDATION'
   | 'VALIDATION_BON_PREP'
@@ -94,6 +98,8 @@ export type ScreenId =
   | 'A_PROPOS';
 
 export type ScreenGroup =
+  | 'Accueil'
+  | 'Caisse'
   | 'Ventes'
   | 'Achats'
   | 'Stock'
@@ -105,6 +111,7 @@ export type ScreenGroup =
   | 'Réglages';
 
 export const SCREEN_GROUPS: ScreenGroup[] = [
+  'Caisse',
   'Ventes',
   'Achats',
   'Stock',
@@ -118,6 +125,8 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
 
 /** Icon + hint for each module's rail button. */
 export const MODULE_META: Record<ScreenGroup, { icon: LucideIcon; hint: string }> = {
+  Accueil: { icon: LayoutDashboard, hint: "Écran d'accueil" },
+  Caisse: { icon: ScanBarcode, hint: 'Vente au comptoir — scan, encaissement, ticket' },
   Ventes: { icon: ShoppingCart, hint: 'Caisse, bons, factures, avoirs clients' },
   Achats: { icon: Truck, hint: 'Achats, commandes fournisseurs, avoirs' },
   Stock: { icon: Boxes, hint: 'Stocks, mouvements, transferts, inventaires' },
@@ -129,8 +138,8 @@ export const MODULE_META: Record<ScreenGroup, { icon: LucideIcon; hint: string }
   Réglages: { icon: Settings, hint: 'Société, utilisateurs, sauvegardes' }
 };
 
-/** The dashboard doubles as the app's landing page (Home button on the rail). */
-export const HOME_SCREEN: ScreenId = 'TABLEAU_BORD';
+/** Neutral landing screen: opening the app must not start any workflow. */
+export const HOME_SCREEN: ScreenId = 'ACCUEIL';
 export const HOME_ICON: LucideIcon = LayoutDashboard;
 
 export interface ScreenDef {
@@ -144,15 +153,20 @@ export interface ScreenDef {
 }
 
 export const SCREENS: ScreenDef[] = [
+  // ---------- Accueil ----------
+  { id: 'ACCUEIL', label: 'Accueil', group: 'Accueil', keywords: 'bienvenue demarrage home page accueil' },
+
+  // ---------- Caisse (module autonome) ----------
+  { id: 'CAISSE_POS', label: 'Vente au comptoir', group: 'Caisse', keywords: 'pos caisse scanner code barres ticket detail retail comptoir' },
+
   // ---------- Ventes ----------
-  { id: 'CAISSE_POS', label: 'Caisse (comptoir)', group: 'Ventes', keywords: 'pos scanner code barres ticket vente detail retail' },
-  { id: 'BONS_PREP', label: 'Bons de préparation', group: 'Ventes', keywords: 'commande client preparation bp reservation' },
+  { id: 'BONS_PREP', label: 'Bons de commande', group: 'Ventes', keywords: 'commande client bc preparation reservation' },
+  { id: 'VALIDATION_BON_PREP', label: 'Validation des commandes', group: 'Ventes', keywords: 'valider bons attente queue livraison' },
   { id: 'VENTES_VALIDATION', label: 'Ventes', group: 'Ventes', keywords: 'facturation sortie gros' },
-  { id: 'VALIDATION_BON_PREP', label: 'File de validation', group: 'Ventes', keywords: 'valider bons attente queue' },
   { id: 'FACTURE', label: 'Factures', group: 'Ventes', keywords: 'facturation client' },
   { id: 'PROFORMA', label: 'Proformas', group: 'Ventes', keywords: 'devis estimation quote' },
   { id: 'AVOIRS_VENTES', label: 'Avoirs clients', group: 'Ventes', keywords: 'retour client remboursement' },
-  { id: 'LISTE_BONS_PREP', label: 'Liste des bons', group: 'Ventes', keywords: 'bp historique' },
+  { id: 'LISTE_BONS_PREP', label: 'Liste des commandes', group: 'Ventes', keywords: 'bc historique journal' },
 
   // ---------- Achats ----------
   { id: 'ACHATS', label: 'Saisie des achats', group: 'Achats', keywords: 'approvisionnement fournisseur entree' },

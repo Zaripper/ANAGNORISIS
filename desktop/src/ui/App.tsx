@@ -23,6 +23,7 @@ import { InventaireScreen } from '../screens/Inventaire';
 import { CALivreursScreen, FiscalScreen } from '../screens/Analyse';
 import { GraphesScreen, MontantsBlocageScreen, SituationScreen } from '../screens/Insights';
 import { ArchivageScreen, SauvegardeScreen, TablesScreen } from '../screens/Maintenance';
+import { AccueilScreen } from '../screens/Accueil';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -2452,8 +2453,8 @@ function AProposScreen() {
 // 4. MAIN APPLICATION COMPONENT
 // ==========================================
 export default function App({ onLogout }: { onLogout: () => void }) {
-  // The dashboard is the landing page — no empty watermark screen.
-  const [currentView, setCurrentView] = useState<ERPView>('TABLEAU_BORD');
+  // Login lands on a neutral welcome screen — opening the app starts no workflow.
+  const [currentView, setCurrentView] = useState<ERPView>('ACCUEIL');
   const [virementMode, setVirementMode] = useState<'RECETTE' | 'DEPENSE'>('RECETTE');
 
   // Identifies the signed-in user for the shell (name, role) and for role-gated
@@ -3058,6 +3059,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {currentView === 'ARTICLES' && (
           <PrixArticlesView articles={articles} categories={categories} depots={depots} />
         )}
+
+        {currentView === 'ACCUEIL' && <AccueilScreen username={currentUser?.username} onNavigate={setCurrentView} />}
 
         {currentView === 'A_PROPOS' && <AProposScreen />}
 
