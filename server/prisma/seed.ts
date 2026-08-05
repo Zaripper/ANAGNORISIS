@@ -92,12 +92,37 @@ async function main() {
       phone: '+213 70 111 222'
     }
   });
+  // Walk-in counter client used as the default customer on the POS (Caisse) screen.
+  await prisma.partner.upsert({
+    where: { code: 'COMPTOIR' },
+    update: { raisonSociale: 'CLIENT COMPTOIR', categoryId: catVenteDirecte.id },
+    create: { code: 'COMPTOIR', raisonSociale: 'CLIENT COMPTOIR', categoryId: catVenteDirecte.id, balance: 0 }
+  });
+
+  // Company identity shown on printed invoices/tickets. Only created if missing so
+  // an admin's edits from the Paramètres screen survive re-seeding.
+  const defaultSettings: Record<string, string> = {
+    'company.name': 'ETS DJEMROUD',
+    'company.activity': 'Parapharmacie — Gros & Détail',
+    'company.address': '',
+    'company.phone': '',
+    'company.rc': '',
+    'company.nif': '',
+    'company.ai': '',
+    'company.nis': '',
+    'print.footer': 'Merci de votre confiance.'
+  };
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    const existing = await prisma.appSetting.findUnique({ where: { key } });
+    if (!existing) await prisma.appSetting.create({ data: { key, value } });
+  }
 
   // 5. Articles (matching the demo catalog already in the UI mockup) with multi-tier
   //    prices and multi-depot stock.
   const articlesData = [
     {
       code: 'G22111',
+      barcode: '6130001000017',
       designation: 'ACNET AZELIKE PLUS SOIN INTENSIF 30ML',
       pump: 1050.0,
       tvaRate: 19,
@@ -106,6 +131,7 @@ async function main() {
     },
     {
       code: '22251',
+      barcode: '6130001000024',
       designation: 'ACTEEN EAU NETTOYANTE REEQUILIBRANTE 150ML',
       pump: 1100.0,
       tvaRate: 19,
@@ -114,6 +140,7 @@ async function main() {
     },
     {
       code: 'BEMACOS03',
+      barcode: '6130001000031',
       designation: 'SHP BEMASEBO REGULATEUR 200ML',
       pump: 873.0,
       tvaRate: 19,
@@ -122,6 +149,7 @@ async function main() {
     },
     {
       code: 'DERM_C50',
+      barcode: '6130001000048',
       designation: 'DERMOCREM SOIN PROTECTEUR 50ML',
       pump: 650.0,
       tvaRate: 19,
@@ -143,8 +171,8 @@ async function main() {
   for (const art of articlesData) {
     const article = await prisma.article.upsert({
       where: { code: art.code },
-      update: { designation: art.designation, pump: art.pump, tvaRate: art.tvaRate },
-      create: { code: art.code, designation: art.designation, pump: art.pump, tvaRate: art.tvaRate }
+      update: { designation: art.designation, pump: art.pump, tvaRate: art.tvaRate, barcode: art.barcode ?? null },
+      create: { code: art.code, designation: art.designation, pump: art.pump, tvaRate: art.tvaRate, barcode: art.barcode ?? null }
     });
 
     for (const [categoryCode, priceHT] of Object.entries(art.prices)) {

@@ -14,6 +14,14 @@ import {
 } from '../screens/ReferenceData';
 import type { RefField } from '../screens/ReferenceData';
 import { Badge, Button, Card, Field, Input, Modal, Screen, Select, ToastHost, useToasts } from '../components/ui';
+import { POSScreen } from '../screens/POS';
+import { CommandesScreen } from '../screens/Commandes';
+import { ChargesScreen } from '../screens/Charges';
+import { DocumentListScreen, MouvementArticleScreen, ReapproScreen, ValidationQueueScreen } from '../screens/Consultation';
+import { SettingsScreen, UsersScreen } from '../screens/Admin';
+import { InventaireScreen } from '../screens/Inventaire';
+import { CALivreursScreen, FiscalScreen } from '../screens/Analyse';
+import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
 // 1. TYPES & INTERFACES
@@ -70,10 +78,12 @@ export interface Partner {
 export interface Article {
   id: string;
   code: string;
+  barcode?: string | null;
   designation: string;
   pump: number;
   priceHT: number; // display price for the currently selected partner's category tier
   tvaRate: number;
+  seuilReappro?: number | null;
   stockGlobal: number; // summed available stock (in stock - reserved) across all depots
   pricesByCategory: Record<string, { priceHT: number; priceTTC: number }>;
   stocksByDepot: Record<string, { qtyInStock: number; qtyReserved: number }>;
@@ -123,7 +133,7 @@ interface CashTransaction {
   partner?: { code: string; raisonSociale: string } | null;
 }
 
-interface DocumentRow {
+export interface DocumentRow {
   id: string;
   reference: string;
   type: string;
@@ -170,6 +180,8 @@ type ERPView = ScreenId | null;
 type BackendDocumentType =
   | 'ACHAT'
   | 'BON_PREPARATION'
+  | 'FACTURE'
+  | 'PROFORMA'
   | 'RETOUR_FOURNISSEUR'
   | 'RETOUR_CLIENT'
   | 'REGULE_PLUS'
@@ -184,6 +196,10 @@ function viewToDocumentType(view: ERPView): BackendDocumentType {
       return 'RETOUR_FOURNISSEUR';
     case 'AVOIRS_VENTES':
       return 'RETOUR_CLIENT';
+    case 'FACTURE':
+      return 'FACTURE';
+    case 'PROFORMA':
+      return 'PROFORMA';
     case 'BONS_PREP':
     case 'VENTES_VALIDATION':
     default:
@@ -2439,7 +2455,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
   // Identifies the signed-in user for the shell (name, role) and for role-gated
   // navigation entries. Read from the session the login screen persisted.
-  const currentUser = useMemo(() => getStoredUser<{ username: string; role: UserRole }>(), []);
+  const currentUser = useMemo(() => getStoredUser<{ id: string; username: string; role: UserRole }>(), []);
 
   /**
    * Régules and chèques used to share one view with a hidden mode toggle, so the
@@ -2467,7 +2483,45 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   const [depots, setDepots] = useState<Depot[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
+  const [settings, setSettings] = useState<CompanySettings>({});
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  /** Fetches the full document (lines + article info) and sends it to the printer as an A4 bon/facture. */
+  async function handlePrintDocument(docId: string) {
+    try {
+      const doc = await apiRequest<any>(`/documents/${docId}`);
+      printHtml(
+        invoiceHtml(
+          {
+            reference: doc.reference,
+            type: doc.type,
+            date: doc.validatedAt ?? doc.createdAt,
+            partnerName: doc.partner?.raisonSociale ?? null,
+            partnerCode: doc.partner?.code ?? null,
+            partnerAddress: doc.partner?.address ?? null,
+            paymentMode: doc.paymentMode,
+            totalHT: num(doc.totalHT),
+            remise: num(doc.remise),
+            totalTVA: num(doc.totalTVA),
+            stampDuty: num(doc.stampDuty),
+            totalTTC: num(doc.totalTTC),
+            lines: (doc.lines ?? []).map((l: any) => ({
+              code: l.article?.code ?? '',
+              designation: l.article?.designation ?? '',
+              quantity: l.quantity,
+              unitPriceHT: num(l.unitPriceHT),
+              discountPercent: num(l.discountPercent),
+              tvaRate: num(l.tvaRate),
+              totalHT: num(l.totalHT)
+            }))
+          },
+          settings
+        )
+      );
+    } catch {
+      alert("Impression impossible — document introuvable.");
+    }
+  }
 
   async function refreshAll() {
     try {
@@ -2483,6 +2537,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         apiRequest<DocumentRow[]>('/documents'),
         apiRequest<{ transactions: CashTransaction[]; totalBalance: number }>('/cash')
       ]);
+      // Company identity for printed documents; non-fatal if unavailable.
+      apiRequest<CompanySettings>('/settings').then(setSettings).catch(() => undefined);
 
       setCategories(categoriesRes);
       setZones(zonesRes);
@@ -2588,9 +2644,11 @@ export default function App({ onLogout }: { onLogout: () => void }) {
       return {
         id: a.id,
         code: a.code,
+        barcode: a.barcode ?? null,
         designation: a.designation,
         pump: num(a.pump),
         tvaRate: num(a.tvaRate),
+        seuilReappro: a.seuilReappro ?? null,
         priceHT: tierPrice ?? num(a.pump),
         stockGlobal: totalAvailable,
         pricesByCategory,
@@ -2674,6 +2732,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
     if (currentView === 'BONS_PREP' || currentView === 'VENTES_VALIDATION') return d.type === 'BON_PREPARATION';
     if (currentView === 'AVOIRS_ACHATS') return d.type === 'RETOUR_FOURNISSEUR';
     if (currentView === 'AVOIRS_VENTES') return d.type === 'RETOUR_CLIENT';
+    if (currentView === 'FACTURE') return d.type === 'FACTURE';
+    if (currentView === 'PROFORMA') return d.type === 'PROFORMA';
     return false;
   });
 
@@ -2771,7 +2831,15 @@ export default function App({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
-    const autoValidate = currentView === 'VENTES_VALIDATION' || currentView === 'AVOIRS_ACHATS' || currentView === 'AVOIRS_VENTES';
+    // Documents that are final at save time: ventes/avoirs (immediate commercial
+    // effect), factures (a facture is not a draft), and proformas (validation is a
+    // no-op for them — no stock, no ledger — but marks the quote as issued).
+    const autoValidate =
+      currentView === 'VENTES_VALIDATION' ||
+      currentView === 'AVOIRS_ACHATS' ||
+      currentView === 'AVOIRS_VENTES' ||
+      currentView === 'FACTURE' ||
+      currentView === 'PROFORMA';
 
     setSaving(true);
     setNotice(null);
@@ -3002,6 +3070,71 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {currentView === 'A_PROPOS' && <AProposScreen />}
 
+        {/* ---------- POS / RETAIL ---------- */}
+        {currentView === 'CAISSE_POS' && (
+          <POSScreen
+            articles={articles}
+            partners={partners}
+            depots={depots}
+            settings={settings}
+            cashierName={currentUser?.username}
+            onSaved={refreshAll}
+          />
+        )}
+
+        {/* ---------- COMMANDES / CHARGES ---------- */}
+        {currentView === 'COMMANDES' && (
+          <CommandesScreen articles={articles} partners={partners} depots={depots} documents={documents} onSaved={refreshAll} />
+        )}
+        {currentView === 'CHARGES' && <ChargesScreen chargeClasses={chargeClasses} />}
+
+        {/* ---------- CONSULTATION ---------- */}
+        {currentView === 'VALIDATION_BON_PREP' && (
+          <ValidationQueueScreen documents={documents} onChanged={refreshAll} onPrint={handlePrintDocument} />
+        )}
+        {currentView === 'ACHATS_CONSULT' && (
+          <DocumentListScreen
+            title="Consultation des achats"
+            description="Historique des achats fournisseurs et de leurs avoirs."
+            documents={documents}
+            types={['ACHAT', 'RETOUR_FOURNISSEUR']}
+            onPrint={handlePrintDocument}
+          />
+        )}
+        {currentView === 'LISTE_BONS_PREP' && (
+          <DocumentListScreen
+            title="Liste des bons de préparation"
+            description="Tous les bons de préparation, quel que soit leur statut."
+            documents={documents}
+            types={['BON_PREPARATION']}
+            onPrint={handlePrintDocument}
+          />
+        )}
+        {currentView === 'ARCHIVE' && (
+          <DocumentListScreen
+            title="Consultation de l'archive"
+            description="Documents validés et annulés, tous types confondus."
+            documents={documents}
+            types={['ACHAT', 'COMMANDE', 'BON_PREPARATION', 'VENTE', 'FACTURE', 'PROFORMA', 'RETOUR_CLIENT', 'RETOUR_FOURNISSEUR', 'REGULE_PLUS', 'REGULE_MOINS', 'TRANSFERT']}
+            statuses={['VALIDE', 'ANNULE']}
+            onPrint={handlePrintDocument}
+          />
+        )}
+        {currentView === 'MOUVEMENT_ARTICLE' && <MouvementArticleScreen articles={articles} />}
+        {currentView === 'REAPPRO' && <ReapproScreen articles={articles} onChanged={refreshAll} />}
+
+        {/* ---------- ANALYSE / FISCAL ---------- */}
+        {currentView === 'CHIFFRE_AFFAIRES_AGENT' && <CALivreursScreen />}
+        {currentView === 'DECLARATION_TVA' && <FiscalScreen kind="TVA" settings={settings} />}
+        {currentView === 'ETAT_104' && <FiscalScreen kind="ETAT104" settings={settings} />}
+        {currentView === 'DECLARATION_TAP' && <FiscalScreen kind="TAP" settings={settings} />}
+        {currentView === 'ETAT_G50' && <FiscalScreen kind="G50" settings={settings} />}
+
+        {/* ---------- OUTILS ---------- */}
+        {currentView === 'UTILISATEURS' && <UsersScreen currentUserId={currentUser?.id} />}
+        {currentView === 'PARAMETRES' && <SettingsScreen onSaved={setSettings} />}
+        {currentView === 'INVENTAIRES' && <InventaireScreen articles={articles} depots={depots} onSaved={refreshAll} />}
+
         {/* ---------- STOCKS ---------- */}
         {currentView === 'STOCKS' && (
           <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
@@ -3134,12 +3267,14 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {/* ---------- ETATS DES ARTICLES ---------- */}
         {currentView === 'ETATS_ARTICLES' && <EtatsArticlesScreen articles={articles} />}
 
-        {/* ---------- ACTIVE DOCUMENT EDITOR VIEW (Achats / Bons Prep / Ventes) ---------- */}
+        {/* ---------- ACTIVE DOCUMENT EDITOR VIEW (Achats / Bons Prep / Ventes / Factures / Proforma) ---------- */}
         {(currentView === 'ACHATS' ||
           currentView === 'BONS_PREP' ||
           currentView === 'VENTES_VALIDATION' ||
           currentView === 'AVOIRS_ACHATS' ||
-          currentView === 'AVOIRS_VENTES') && (
+          currentView === 'AVOIRS_VENTES' ||
+          currentView === 'FACTURE' ||
+          currentView === 'PROFORMA') && (
           <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-7xl mx-auto w-full z-10">
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -3150,6 +3285,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                     {currentView === 'BONS_PREP' && 'Bon de Préparation'}
                     {currentView === 'AVOIRS_ACHATS' && 'Avoir Achat (Retour Fournisseur)'}
                     {currentView === 'AVOIRS_VENTES' && 'Avoir Vente (Retour Client)'}
+                    {currentView === 'FACTURE' && 'Facture Client'}
+                    {currentView === 'PROFORMA' && 'Facture Proforma (Devis)'}
                   </span>
                   <span className="text-slate-400 font-mono text-xs">
                     Réf: {viewingDocDetail?.reference ?? docReference ?? '(nouveau)'}
@@ -3189,6 +3326,14 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {viewingDocDetail && (
+                    <button
+                      onClick={() => handlePrintDocument(viewingDocDetail.id)}
+                      className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold px-4 py-2 rounded-xl transition text-xs"
+                    >
+                      🖨 Imprimer
+                    </button>
+                  )}
                   {viewingDocDetail?.status === 'OUVERT' && (
                     <button
                       onClick={handleModifier}
@@ -3410,6 +3555,10 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                       ? 'Enregistrement...'
                       : currentView === 'BONS_PREP'
                       ? 'Enregistrer la Réservation [F10]'
+                      : currentView === 'FACTURE'
+                      ? 'Enregistrer la Facture [F10]'
+                      : currentView === 'PROFORMA'
+                      ? 'Émettre la Proforma [F10]'
                       : currentView === 'VENTES_VALIDATION' || currentView === 'AVOIRS_ACHATS' || currentView === 'AVOIRS_VENTES'
                       ? 'Enregistrer et Valider [F10]'
                       : 'Enregistrer [F10]'}

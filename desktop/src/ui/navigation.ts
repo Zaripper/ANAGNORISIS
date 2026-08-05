@@ -25,6 +25,7 @@ export type ScreenId =
   | 'CHARGE_CLASSES'
   | 'TYPE_REGLEMENTS'
   // Mouvement — documents
+  | 'CAISSE_POS'
   | 'ACHATS'
   | 'BONS_PREP'
   | 'VENTES_VALIDATION'
@@ -115,6 +116,7 @@ export const SCREENS: ScreenDef[] = [
   { id: 'TYPE_REGLEMENTS', label: 'Types de règlement', group: 'Fichier', keywords: 'paiement conditions regles', implemented: true },
 
   // ---------- Mouvement ----------
+  { id: 'CAISSE_POS', label: 'Caisse (vente comptoir)', group: 'Mouvement', keywords: 'pos scanner code barres ticket vente detail retail', implemented: true },
   { id: 'ACHATS', label: 'Saisie des achats', group: 'Mouvement', keywords: 'approvisionnement fournisseur entree', implemented: true },
   { id: 'BONS_PREP', label: 'Bons de préparation', group: 'Mouvement', keywords: 'commande client preparation bp', implemented: true },
   { id: 'VENTES_VALIDATION', label: 'Ventes', group: 'Mouvement', keywords: 'facturation sortie', implemented: true },
@@ -123,12 +125,12 @@ export const SCREENS: ScreenDef[] = [
   { id: 'REGULES_PLUS', label: 'Régules plus', group: 'Mouvement', keywords: 'correction stock entree ajustement', implemented: true },
   { id: 'REGULES_MOINS', label: 'Régules moins', group: 'Mouvement', keywords: 'correction stock sortie ajustement', implemented: true },
   { id: 'TRANSFERTS', label: 'Transferts inter-dépôts', group: 'Mouvement', keywords: 'mouvement depot', implemented: true },
-  { id: 'COMMANDES', label: 'Commandes', group: 'Mouvement', keywords: 'commande fournisseur reception', implemented: false },
-  { id: 'ACHATS_CONSULT', label: 'Consultation des achats', group: 'Mouvement', keywords: 'liste achats historique', implemented: false },
-  { id: 'VALIDATION_BON_PREP', label: 'Validation bons de préparation', group: 'Mouvement', keywords: 'file attente valider bp', implemented: false },
-  { id: 'PROFORMA', label: 'Proforma', group: 'Mouvement', keywords: 'devis estimation', implemented: false },
-  { id: 'FACTURE', label: 'Facture', group: 'Mouvement', keywords: 'facturation client', implemented: false },
-  { id: 'CHARGES', label: 'Charges', group: 'Mouvement', keywords: 'depenses frais generaux', implemented: false },
+  { id: 'COMMANDES', label: 'Commandes', group: 'Mouvement', keywords: 'commande fournisseur reception', implemented: true },
+  { id: 'ACHATS_CONSULT', label: 'Consultation des achats', group: 'Mouvement', keywords: 'liste achats historique', implemented: true },
+  { id: 'VALIDATION_BON_PREP', label: 'Validation bons de préparation', group: 'Mouvement', keywords: 'file attente valider bp', implemented: true },
+  { id: 'PROFORMA', label: 'Proforma', group: 'Mouvement', keywords: 'devis estimation', implemented: true },
+  { id: 'FACTURE', label: 'Facture', group: 'Mouvement', keywords: 'facturation client', implemented: true },
+  { id: 'CHARGES', label: 'Charges', group: 'Mouvement', keywords: 'depenses frais generaux', implemented: true },
 
   // ---------- Trésorerie ----------
   { id: 'CHEQUES_RECETTE', label: 'Chèques reçus', group: 'Trésorerie', keywords: 'encaissement cheque recette', implemented: true },
@@ -142,33 +144,33 @@ export const SCREENS: ScreenDef[] = [
   { id: 'STOCKS', label: 'Stocks', group: 'Consultation', keywords: 'quantites disponible depot', implemented: true },
   { id: 'PRIX_ARTICLES', label: "Prix d'articles", group: 'Consultation', keywords: 'tarifs grille prix', implemented: true },
   { id: 'ETATS_ARTICLES', label: 'États des articles', group: 'Consultation', keywords: 'inventaire valorisation pump', implemented: true },
-  { id: 'MOUVEMENT_ARTICLE', label: "Mouvement d'un article", group: 'Consultation', keywords: 'historique ligne traçabilite', implemented: false },
+  { id: 'MOUVEMENT_ARTICLE', label: "Mouvement d'un article", group: 'Consultation', keywords: 'historique ligne traçabilite', implemented: true },
   { id: 'SITUATION', label: 'Situation', group: 'Consultation', keywords: 'etat general snapshot', implemented: false },
-  { id: 'REAPPRO', label: 'Articles à réapprovisionner', group: 'Consultation', keywords: 'rupture seuil commande minimum', implemented: false },
+  { id: 'REAPPRO', label: 'Articles à réapprovisionner', group: 'Consultation', keywords: 'rupture seuil commande minimum', implemented: true },
   { id: 'SUIVI_PARTENAIRE', label: "Suivi d'un partenaire", group: 'Consultation', keywords: 'releve compte client historique', implemented: true },
   { id: 'CREANCES_DETTES', label: 'Créances et dettes', group: 'Consultation', keywords: 'balance ages solde', implemented: true },
   { id: 'CREANCES_A_RECOUVRER', label: 'Créances à recouvrer', group: 'Consultation', keywords: 'recouvrement impayes', implemented: true },
   { id: 'PARTENAIRES_BLOQUES', label: 'Partenaires bloqués', group: 'Consultation', keywords: 'credit depasse seuil blocage', implemented: true },
-  { id: 'LISTE_BONS_PREP', label: 'Liste des bons de préparation', group: 'Consultation', keywords: 'bp liste', implemented: false },
-  { id: 'ARCHIVE', label: "Consultation de l'archive", group: 'Consultation', keywords: 'documents annules anciens', implemented: false },
+  { id: 'LISTE_BONS_PREP', label: 'Liste des bons de préparation', group: 'Consultation', keywords: 'bp liste', implemented: true },
+  { id: 'ARCHIVE', label: "Consultation de l'archive", group: 'Consultation', keywords: 'documents annules anciens', implemented: true },
 
   // ---------- Analyse ----------
   { id: 'TABLEAU_BORD', label: 'Tableau de bord', group: 'Analyse', keywords: 'kpi indicateurs accueil dashboard', implemented: true },
   { id: 'CHIFFRE_AFFAIRES', label: "Chiffre d'affaires", group: 'Analyse', keywords: 'ca ventes mensuel', implemented: true },
   { id: 'VENTES_ARTICLES', label: "Ventes d'articles", group: 'Analyse', keywords: 'top produits rotation', implemented: true },
-  { id: 'CHIFFRE_AFFAIRES_AGENT', label: "Chiffre d'affaires par agent", group: 'Analyse', keywords: 'livreur commercial performance', implemented: false },
+  { id: 'CHIFFRE_AFFAIRES_AGENT', label: "Chiffre d'affaires par agent", group: 'Analyse', keywords: 'livreur commercial performance', implemented: true },
   { id: 'GRAPHE_INDICES', label: 'Graphes et indices', group: 'Analyse', keywords: 'evolution courbes statistiques', implemented: false },
 
   // ---------- Fiscal ----------
-  { id: 'ETAT_104', label: 'État 104 et Timbre', group: 'Fiscal', keywords: 'impot timbre fiscal', implemented: false },
-  { id: 'DECLARATION_TVA', label: 'Déclaration TVA', group: 'Fiscal', keywords: 'taxe valeur ajoutee', implemented: false },
-  { id: 'DECLARATION_TAP', label: 'Déclaration TAP', group: 'Fiscal', keywords: 'taxe activite professionnelle', implemented: false },
-  { id: 'ETAT_G50', label: 'État G50', group: 'Fiscal', keywords: 'declaration mensuelle impots', implemented: false },
+  { id: 'ETAT_104', label: 'État 104 et Timbre', group: 'Fiscal', keywords: 'impot timbre fiscal', implemented: true },
+  { id: 'DECLARATION_TVA', label: 'Déclaration TVA', group: 'Fiscal', keywords: 'taxe valeur ajoutee', implemented: true },
+  { id: 'DECLARATION_TAP', label: 'Déclaration TAP', group: 'Fiscal', keywords: 'taxe activite professionnelle', implemented: true },
+  { id: 'ETAT_G50', label: 'État G50', group: 'Fiscal', keywords: 'declaration mensuelle impots', implemented: true },
 
   // ---------- Outils ----------
-  { id: 'UTILISATEURS', label: 'Gestion des utilisateurs', group: 'Outils', keywords: 'comptes roles permissions', implemented: false, roles: ['ADMINISTRATEUR'] },
-  { id: 'PARAMETRES', label: 'Paramètres', group: 'Outils', keywords: 'configuration societe reglages', implemented: false, roles: ['ADMINISTRATEUR'] },
-  { id: 'INVENTAIRES', label: 'Inventaires', group: 'Outils', keywords: 'comptage physique ecarts', implemented: false },
+  { id: 'UTILISATEURS', label: 'Gestion des utilisateurs', group: 'Outils', keywords: 'comptes roles permissions', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'PARAMETRES', label: 'Paramètres', group: 'Outils', keywords: 'configuration societe reglages', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'INVENTAIRES', label: 'Inventaires', group: 'Outils', keywords: 'comptage physique ecarts', implemented: true },
   { id: 'SAUVEGARDE', label: 'Sauvegarde / Restauration', group: 'Outils', keywords: 'backup restore base donnees', implemented: false, roles: ['ADMINISTRATEUR'] },
   { id: 'ARCHIVAGE', label: 'Archivage des données', group: 'Outils', keywords: 'purge exercice cloture', implemented: false, roles: ['ADMINISTRATEUR'] },
   { id: 'MONTANTS_BLOCAGE', label: 'Calcul des montants de blocage', group: 'Outils', keywords: 'seuil credit recalcul', implemented: false, roles: ['ADMINISTRATEUR'] },

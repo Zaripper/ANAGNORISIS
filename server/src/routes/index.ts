@@ -5,10 +5,19 @@ import {
   cancelDocument,
   createDocument,
   deleteDraftDocument,
+  receiveCommande,
   updateDraftDocument,
   validateDocument
 } from '../services/document.service';
-import { getChiffreAffaires, getDashboardSummary, getVentesArticles } from '../services/report.service';
+import {
+  getArticleMovements,
+  getCAByLivreur,
+  getChiffreAffaires,
+  getDashboardSummary,
+  getFiscalSummary,
+  getReorderAlerts,
+  getVentesArticles
+} from '../services/report.service';
 import {
   createArticleSchema,
   createCashTransactionSchema,
@@ -21,8 +30,11 @@ import {
   createPartnerCategorySchema,
   createPartnerSchema,
   createTypeReglementSchema,
+  createUserSchema,
   createZoneSchema,
   loginSchema,
+  updateSettingsSchema,
+  updateUserSchema,
   paymentModes,
   updateArticleSchema,
   updateChargeClassSchema,
@@ -539,4 +551,151 @@ api.get('/reports/ventes-articles', async (req, res) => {
 
 api.get('/config/server-url', (_req, res) => {
   res.json({ serverUrl: process.env.CORS_ORIGIN || `http://127.0.0.1:${config.port}` });
+});
+
+// ---------- Article intelligence ----------
+api.get('/articles/reorder-alerts', async (_req, res) => {
+  try {
+    res.json(await getReorderAlerts());
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+/**
+ * Barcode/code lookup for the POS scan input. Exact barcode match first (that is
+ * what a scanner emits), then exact article code, case-insensitively.
+ */
+api.get('/articles/lookup', async (req, res) => {
+  const raw = typeof req.query.code === 'string' ? req.query.code.trim() : '';
+  if (!raw) return res.status(400).json({ message: 'CODE_REQUIRED' });
+  const article =
+    (await prisma.article.findFirst({
+      where: { barcode: raw, active: true },
+      include: { prices: { include: { category: true } }, stocks: { include: { depot: true } } }
+    })) ??
+    (await prisma.article.findFirst({
+      where: { code: { equals: raw, mode: 'insensitive' }, active: true },
+      include: { prices: { include: { category: true } }, stocks: { include: { depot: true } } }
+    }));
+  if (!article) return res.status(404).json({ message: 'ARTICLE_NOT_FOUND' });
+  res.json(article);
+});
+
+api.get('/articles/:id/movements', async (req, res) => {
+  try {
+    res.json(await getArticleMovements(req.params.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Commandes (purchase orders) ----------
+api.post('/documents/:id/receive', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
+  try {
+    res.json(await receiveCommande(req.params.id, req.user?.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Users (admin only) ----------
+api.get('/users', requireRole('ADMINISTRATEUR'), async (_req, res) => {
+  res.json(
+    await prisma.user.findMany({
+      select: { id: true, username: true, role: true, active: true, createdAt: true, updatedAt: true },
+      orderBy: { username: 'asc' }
+    })
+  );
+});
+
+api.post('/users', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    const input = createUserSchema.parse(req.body);
+    const user = await prisma.user.create({
+      data: {
+        username: input.username,
+        passwordHash: await bcrypt.hash(input.password, 10),
+        role: input.role,
+        active: input.active
+      },
+      select: { id: true, username: true, role: true, active: true, createdAt: true }
+    });
+    res.status(201).json(user);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+api.put('/users/:id', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    const input = updateUserSchema.parse(req.body);
+
+    // An admin cannot lock themselves out mid-session…
+    if (req.params.id === req.user?.id && (input.active === false || (input.role && input.role !== 'ADMINISTRATEUR'))) {
+      return res.status(400).json({ message: 'CANNOT_DEMOTE_SELF' });
+    }
+    // …and the system must always keep at least one active administrator.
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ message: 'USER_NOT_FOUND' });
+    if (target.role === 'ADMINISTRATEUR' && (input.active === false || (input.role && input.role !== 'ADMINISTRATEUR'))) {
+      const otherAdmins = await prisma.user.count({
+        where: { role: 'ADMINISTRATEUR', active: true, id: { not: target.id } }
+      });
+      if (otherAdmins === 0) return res.status(400).json({ message: 'LAST_ADMIN_PROTECTED' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        role: input.role,
+        active: input.active,
+        ...(input.password ? { passwordHash: await bcrypt.hash(input.password, 10) } : {})
+      },
+      select: { id: true, username: true, role: true, active: true, updatedAt: true }
+    });
+    res.json(user);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Application settings ----------
+api.get('/settings', async (_req, res) => {
+  const rows = await prisma.appSetting.findMany();
+  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
+});
+
+api.put('/settings', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    const input = updateSettingsSchema.parse(req.body);
+    await prisma.$transaction(
+      Object.entries(input).map(([key, value]) =>
+        prisma.appSetting.upsert({ where: { key }, update: { value }, create: { key, value } })
+      )
+    );
+    const rows = await prisma.appSetting.findMany();
+    res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Extended reports ----------
+api.get('/reports/ca-livreurs', async (req, res) => {
+  try {
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 36);
+    res.json(await getCAByLivreur(months));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+api.get('/reports/fiscal', async (req, res) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    res.json(await getFiscalSummary(year));
+  } catch (error) {
+    handleError(res, error);
+  }
 });

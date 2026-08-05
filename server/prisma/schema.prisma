@@ -15,6 +15,9 @@ enum UserRole {
 
 enum DocumentType {
   ACHAT
+  /// Purchase order to a supplier. No stock or ledger effect of its own —
+  /// receiving it generates a real ACHAT (see receiveCommande).
+  COMMANDE
   BON_PREPARATION
   VENTE
   FACTURE
@@ -91,6 +94,14 @@ model TypeReglement {
   label     String
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Key/value application settings (company identity for printed documents,
+/// numbering preferences...). Admin-editable from the Paramètres screen.
+model AppSetting {
+  key       String   @id
+  value     String
   updatedAt DateTime @updatedAt
 }
 

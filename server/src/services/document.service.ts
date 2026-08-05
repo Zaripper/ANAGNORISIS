@@ -4,7 +4,8 @@ import {
   CreateDocumentInput,
   UpdateDocumentInput,
   DocumentType,
-  clamp,
+  PaymentMode,
+  computeDocTotals,
   stockConsumingTypes,
   stockReceivingTypes,
   pumpRecalculatingTypes,
@@ -12,9 +13,6 @@ import {
 } from '../../../shared/src';
 
 type Tx = Prisma.TransactionClient;
-
-const TIMBRE_MIN = 5.0;
-const TIMBRE_MAX = 2500.0;
 
 function isConsuming(type: DocumentType) {
   return (stockConsumingTypes as string[]).includes(type);
@@ -32,15 +30,12 @@ function recalculatesPump(type: DocumentType) {
   return (pumpRecalculatingTypes as string[]).includes(type);
 }
 
-function fiscalStamp(preStampTotalTTC: number, paymentMode: string) {
-  if (paymentMode !== 'ESPECE' || preStampTotalTTC <= 0) return 0;
-  return clamp(Math.round(preStampTotalTTC * 0.01 * 100) / 100, TIMBRE_MIN, TIMBRE_MAX);
-}
-
 function typePrefix(type: string) {
   switch (type) {
     case 'ACHAT':
       return 'AC';
+    case 'COMMANDE':
+      return 'CM';
     case 'BON_PREPARATION':
       return 'BP';
     case 'VENTE':
@@ -114,16 +109,9 @@ async function computeLines(tx: Tx, lines: CreateDocumentInput['lines']): Promis
   return result;
 }
 
+/** Thin adapter over the shared totals function — the ONLY totals math in the app. */
 function summarize(lines: ComputedLine[], remise: number, paymentMode: string) {
-  const totalHT = lines.reduce((sum, l) => sum + l.totalHT, 0);
-  const totalTVA = lines.reduce((sum, l) => sum + (l.totalTTC - l.totalHT), 0);
-  const preStampTTC = totalHT - remise + totalTVA;
-  const stampDuty = fiscalStamp(preStampTTC, paymentMode);
-  const totalTTC = preStampTTC + stampDuty;
-  const purchaseTotal = lines.reduce((sum, l) => sum + l.quantity * l.purchaseCostPUMP, 0);
-  const marginHT = totalHT - purchaseTotal;
-  const marginPercent = totalHT > 0 ? (marginHT / totalHT) * 100 : 0;
-  return { totalHT, totalTVA, stampDuty, totalTTC, marginHT, marginPercent };
+  return computeDocTotals(lines, remise, paymentMode as PaymentMode);
 }
 
 /** Preview totals for a not-yet-saved document (drives the live totals bar in the UI). */
@@ -524,4 +512,56 @@ export async function cancelDocument(documentId: string) {
       include: { lines: true, partner: true, depot: true, destDepot: true }
     });
   });
+}
+
+/**
+ * Receive a purchase order: generate a real ACHAT from the COMMANDE's lines and
+ * validate it (stock in + PUMP recalculation + supplier ledger), then mark the
+ * commande VALIDE with a motif linking it to the generated purchase.
+ *
+ * Runs as three atomic steps rather than one giant transaction: each step leaves
+ * the database consistent on its own (a draft ACHAT with no validation has no
+ * stock effect), and the commande is only marked received once the ACHAT is
+ * fully validated.
+ */
+export async function receiveCommande(commandeId: string, receivedById?: string) {
+  const commande = await prisma.document.findUnique({ where: { id: commandeId }, include: { lines: true } });
+  if (!commande) throw new Error('DOCUMENT_NOT_FOUND');
+  if (commande.type !== 'COMMANDE') throw new Error('NOT_A_COMMANDE');
+  if (commande.status !== 'OUVERT') throw new Error('COMMANDE_ALREADY_RECEIVED_OR_CANCELLED');
+  if (!commande.partnerId) throw new Error('PARTNER_REQUIRED_FOR_TYPE');
+
+  const achat = await createDocument(
+    {
+      type: 'ACHAT',
+      partnerId: commande.partnerId,
+      livreurId: commande.livreurId,
+      depotId: commande.depotId,
+      destDepotId: null,
+      supplierInvoiceNum: commande.supplierInvoiceNum,
+      motif: `Réception commande ${commande.reference}`,
+      paymentMode: commande.paymentMode as PaymentMode,
+      remise: Number(commande.remise),
+      lines: commande.lines.map((l) => ({
+        articleId: l.articleId,
+        depotId: l.depotId,
+        quantity: l.quantity,
+        unitPriceHT: Number(l.unitPriceHT),
+        discountPercent: Number(l.discountPercent),
+        tvaRate: Number(l.tvaRate)
+      }))
+    },
+    receivedById
+  );
+
+  const validated = await validateDocument(achat.id, receivedById);
+
+  const updatedCommande = await prisma.document.update({
+    // Guard on status so two concurrent receptions cannot both generate an ACHAT.
+    where: { id: commandeId, status: 'OUVERT' },
+    data: { status: 'VALIDE', validatedAt: new Date(), motif: `Réceptionnée → ${validated.reference}` },
+    include: { lines: true, partner: true, depot: true }
+  });
+
+  return { commande: updatedCommande, achat: validated };
 }

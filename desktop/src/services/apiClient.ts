@@ -1,5 +1,24 @@
+/**
+ * API base resolution, in priority order:
+ *  1. the server address saved from the login screen (client stations on the LAN
+ *     point at the server machine, e.g. http://192.168.1.10:5000),
+ *  2. the address injected by the Electron preload,
+ *  3. localhost for single-machine setups and development.
+ */
 export function getApiBase() {
+  const saved = localStorage.getItem('serverUrl');
+  if (saved) return `${saved.replace(/\/+$/, '')}/api`;
   return (window as any).erp?.apiBaseUrl || 'http://127.0.0.1:5000/api';
+}
+
+export function getServerUrl(): string {
+  return localStorage.getItem('serverUrl') || '';
+}
+
+export function setServerUrl(url: string) {
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (trimmed) localStorage.setItem('serverUrl', trimmed);
+  else localStorage.removeItem('serverUrl');
 }
 
 export function getToken() {

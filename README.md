@@ -5,8 +5,8 @@ purchasing, stock across multiple depots, sales and preparation slips, treasury,
 and partner accounts. Desktop application (Electron + React) over a local
 Express/PostgreSQL API, designed for concurrent users on a company LAN.
 
-> **Status: in active development — not yet production-ready.**
-> 33 of 59 planned screens are implemented. See [Module status](#module-status).
+> **Status: in active development.** 52 of 60 planned screens are implemented
+> (the sidebar shows the live count; unbuilt modules are marked *à venir*).
 > Earlier revisions of this document claimed "100% feature complete" and
 > "0 TypeScript errors"; neither was accurate. This file now tracks reality.
 
@@ -106,23 +106,27 @@ typing `depot` finds *Dépôts*). Screens not yet built are shown dimmed and mar
 Implemented and working against real data:
 
 - **Fichier** — Partenaires, Catégories de partenaires, Articles, Dépôts, Livreurs, Zones, Classes de charges, Types de règlement
-- **Mouvement** — Saisie des achats, Bons de préparation, Ventes, Avoirs achats/ventes, Régules ±, Transferts inter-dépôts
+- **Mouvement** — **Caisse POS (vente comptoir avec scan code-barres + ticket 80mm)**, Saisie des achats, Commandes fournisseurs (avec réception → achat validé), Bons de préparation, Validation des bons, Ventes, Factures, Proformas, Avoirs achats/ventes, Régules ±, Transferts inter-dépôts, Charges
 - **Trésorerie** — Chèques reçus/émis, Virements, Journal de caisse, Journal de banque, Transactions caissières
-- **Consultation** — Stocks, Prix d'articles, États des articles, Suivi d'un partenaire, Créances et dettes, Créances à recouvrer, Partenaires bloqués
-- **Analyse** — Tableau de bord, Chiffre d'affaires, Ventes d'articles
+- **Consultation** — Stocks, Prix d'articles, États des articles, Mouvement d'un article, Articles à réapprovisionner (seuils éditables), Consultation des achats, Liste des bons, Archive, Suivi d'un partenaire, Créances et dettes, Créances à recouvrer, Partenaires bloqués
+- **Analyse** — Tableau de bord, Chiffre d'affaires, Chiffre d'affaires par agent, Ventes d'articles
+- **Fiscal** — État 104/Timbre, Déclaration TVA, Déclaration TAP, État G50 — *documents de travail pour le comptable, explicitement non contractuels*
+- **Outils** — Gestion des utilisateurs (rôles, protection dernier admin), Paramètres (identité société sur les impressions), Inventaire physique (écarts → régules validées)
+
+Printing: every commercial document has an **Imprimer** button (A4 with totals in
+French words per Algerian practice); the POS prints an 80mm thermal ticket with
+cash received / change due.
 
 Not yet built (visible in the UI, marked *à venir*):
 
-- **Mouvement** — Commandes, Consultation des achats, Validation des bons de préparation, Proforma, Facture, Charges
-- **Consultation** — Mouvement d'un article, Situation, Articles à réapprovisionner, Liste des bons de préparation, Archive
-- **Analyse** — Chiffre d'affaires par agent, Graphes et indices
-- **Fiscal** — État 104 et Timbre, Déclaration TVA, Déclaration TAP, État G50
-- **Outils** — Gestion des utilisateurs, Paramètres, Inventaires, Sauvegarde/Restauration, Archivage, Montants de blocage, Réorganisation des stocks, Affichage des tables, Impression
+- **Consultation** — Situation
+- **Analyse** — Graphes et indices
+- **Outils** — Sauvegarde/Restauration, Archivage, Montants de blocage, Réorganisation des stocks, Affichage des tables, Impression (modèles avancés)
 
 > **Note on the Fiscal group.** État 104, TVA, TAP and G50 are real Algerian tax
-> filings. When built, they are intended as **data exports to hand to an
-> accountant**, not as authoritative filing documents. Verify every figure before
-> submitting anything to the tax authority.
+> filings. The screens here are **working papers to hand to an accountant** — each
+> one carries a "document de travail non contractuel" banner on screen and in
+> print. Verify every figure before submitting anything to the tax authority.
 
 ---
 
@@ -149,7 +153,7 @@ PUMP_new = ((qty_old × PUMP_old) + (qty_in × price_in)) / (qty_old + qty_in)
 ```
 Total HT   = Σ(qty × unit price HT × (1 − discount%))
 Total TVA  = Σ(line HT × TVA rate)
-Timbre     = 1% of HT, cash payments only
+Timbre     = 1% of pre-stamp TTC, cash payments only, clamped to [5, 2500] DZD
 Total TTC  = HT − remise + TVA + timbre
 Marge HT   = TTC − Σ(qty × PUMP)
 ```
@@ -158,6 +162,26 @@ Marge HT   = TTC − Σ(qty × PUMP)
 decreases it; internal movements and quotes never touch a balance. Whether a
 positive balance is a receivable or a payable is decided by the partner
 category's `isSupplier` flag.
+
+---
+
+## LAN deployment (server + client stations)
+
+1. **Server machine**: install PostgreSQL + Node, configure `.env` with
+   `NODE_ENV=production`, a strong `JWT_SECRET`, and
+   `CORS_ORIGIN=http://<client-origin>` (or a comma-separated list). Run the API
+   (`npm run build && npm start -w server`). The API listens on `0.0.0.0:5000`.
+2. **Client stations**: run the desktop app; on the login screen open
+   *Configuration du serveur* and enter `http://<server-ip>:5000`. The address is
+   saved locally on that station.
+3. **Accounts & roles**: create one account per employee in *Gestion des
+   utilisateurs*. ADMINISTRATEUR manages master data, users and settings;
+   CAISSIER operates the POS, treasury and document entry; AGENT has read/entry
+   access. Write access is enforced by role on the server, not just hidden in
+   the UI. The system refuses to demote or deactivate the last active
+   administrator.
+4. **Barcode scanners**: any keyboard-wedge USB scanner works — the POS scan
+   field is always focused and Enter (sent by the scanner) adds the article.
 
 ---
 
@@ -173,12 +197,12 @@ npm run db:generate
 
 These are tracked deliberately rather than hidden:
 
-- **No automated tests.** The financial logic (PUMP, stock, balances) has no
-  regression coverage. This is the highest-priority gap.
+- **Partial test coverage.** The shared financial core (totals, timbre, ledger
+  direction, stock-direction rules) has a vitest suite (`npm test -w shared`);
+  the Prisma-backed services (validation, PUMP recalculation) still lack
+  integration tests.
 - **No Prisma migrations.** The project uses `db:push`. Migrations are needed to
   evolve a live database without data loss.
-- **No audit trail.** `Document.createdById` exists but is not populated, so
-  validated documents cannot be attributed to a user.
 - **List endpoints are unpaginated.** `GET /articles`, `/documents`, `/partners`
   return every row; this will degrade as data grows.
 - **Seeded credentials are weak** and must be rotated before deployment.

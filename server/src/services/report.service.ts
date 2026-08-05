@@ -173,3 +173,177 @@ export async function getVentesArticles(limit: number) {
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, limit);
 }
+
+/**
+ * Net revenue per livreur/agent for the last `months` months. Same VALIDE-only,
+ * sales-minus-returns convention as getChiffreAffaires, grouped by the document's
+ * livreur. Documents with no livreur are grouped under "Sans agent" so the total
+ * always reconciles with the CA report.
+ */
+export async function getCAByLivreur(months: number) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+
+  const docs = await prisma.document.findMany({
+    where: { status: 'VALIDE', validatedAt: { gte: start }, type: { in: [...SALE_TYPES, 'RETOUR_CLIENT'] as any } },
+    select: { type: true, totalHT: true, marginHT: true, livreur: { select: { id: true, code: true, name: true } } }
+  });
+
+  const byLivreur = new Map<string, { code: string; name: string; ventesHT: number; avoirsHT: number; margeHT: number; documents: number }>();
+
+  for (const doc of docs) {
+    const key = doc.livreur?.id ?? '__none__';
+    const entry = byLivreur.get(key) ?? {
+      code: doc.livreur?.code ?? '—',
+      name: doc.livreur?.name ?? 'Sans agent',
+      ventesHT: 0,
+      avoirsHT: 0,
+      margeHT: 0,
+      documents: 0
+    };
+    const ht = Number(doc.totalHT);
+    if (doc.type === 'RETOUR_CLIENT') entry.avoirsHT += ht;
+    else {
+      entry.ventesHT += ht;
+      entry.margeHT += Number(doc.marginHT);
+    }
+    entry.documents += 1;
+    byLivreur.set(key, entry);
+  }
+
+  return Array.from(byLivreur.values())
+    .map((e) => ({ ...e, caNetHT: e.ventesHT - e.avoirsHT }))
+    .sort((a, b) => b.caNetHT - a.caNetHT);
+}
+
+/**
+ * Chronological stock ledger for one article across all VALIDE documents, with a
+ * signed quantity per movement and a running global balance. Transfers appear
+ * twice (out of the source depot, into the destination) and net to zero globally.
+ */
+export async function getArticleMovements(articleId: string) {
+  const receiving = new Set(['ACHAT', 'RETOUR_CLIENT', 'REGULE_PLUS']);
+  const consuming = new Set(['BON_PREPARATION', 'VENTE', 'FACTURE', 'RETOUR_FOURNISSEUR', 'REGULE_MOINS']);
+
+  const lines = await prisma.documentLine.findMany({
+    where: { articleId, document: { status: 'VALIDE' } },
+    select: {
+      quantity: true,
+      unitPriceHT: true,
+      depot: { select: { name: true } },
+      document: {
+        select: {
+          reference: true,
+          type: true,
+          validatedAt: true,
+          partner: { select: { raisonSociale: true } },
+          destDepot: { select: { name: true } }
+        }
+      }
+    }
+  });
+
+  interface Movement {
+    date: Date;
+    reference: string;
+    type: string;
+    depot: string;
+    partner: string | null;
+    qty: number;
+    unitPriceHT: number;
+  }
+
+  const movements: Movement[] = [];
+  for (const l of lines) {
+    const doc = l.document;
+    if (!doc.validatedAt) continue;
+    const base = {
+      date: doc.validatedAt,
+      reference: doc.reference,
+      type: doc.type as string,
+      partner: doc.partner?.raisonSociale ?? null,
+      unitPriceHT: Number(l.unitPriceHT)
+    };
+    if (doc.type === 'TRANSFERT') {
+      movements.push({ ...base, depot: l.depot.name, qty: -l.quantity });
+      movements.push({ ...base, depot: doc.destDepot?.name ?? '?', qty: l.quantity });
+    } else if (receiving.has(doc.type)) {
+      movements.push({ ...base, depot: l.depot.name, qty: l.quantity });
+    } else if (consuming.has(doc.type)) {
+      movements.push({ ...base, depot: l.depot.name, qty: -l.quantity });
+    }
+    // PROFORMA / COMMANDE: never a stock movement.
+  }
+
+  movements.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let running = 0;
+  return movements.map((m) => ({ ...m, runningQty: (running += m.qty) }));
+}
+
+/**
+ * Articles whose global available stock (in stock minus reserved) has fallen
+ * below their reorder threshold. Articles without a threshold never alert.
+ */
+export async function getReorderAlerts() {
+  const articles = await prisma.article.findMany({
+    where: { active: true, seuilReappro: { not: null } },
+    select: { id: true, code: true, designation: true, seuilReappro: true, stocks: { select: { qtyInStock: true, qtyReserved: true } } }
+  });
+
+  return articles
+    .map((a) => {
+      const available = a.stocks.reduce((sum, s) => sum + s.qtyInStock - s.qtyReserved, 0);
+      return { id: a.id, code: a.code, designation: a.designation, seuilReappro: a.seuilReappro ?? 0, available };
+    })
+    .filter((a) => a.available < a.seuilReappro)
+    .sort((a, b) => a.available - b.available);
+}
+
+/**
+ * Monthly fiscal aggregates for one calendar year, intended as a working paper to
+ * hand to the company's accountant — NOT an authoritative filing. TVA collectée
+ * comes from validated sales (minus avoirs), TVA déductible from validated
+ * purchases (minus avoirs), timbre from the stamp actually charged on cash sales.
+ */
+export async function getFiscalSummary(year: number) {
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 0, 1);
+
+  const docs = await prisma.document.findMany({
+    where: { status: 'VALIDE', validatedAt: { gte: start, lt: end } },
+    select: { type: true, totalHT: true, totalTVA: true, stampDuty: true, validatedAt: true }
+  });
+
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    month: `${year}-${String(i + 1).padStart(2, '0')}`,
+    ventesHT: 0,
+    tvaCollectee: 0,
+    achatsHT: 0,
+    tvaDeductible: 0,
+    timbre: 0
+  }));
+
+  for (const doc of docs) {
+    if (!doc.validatedAt) continue;
+    const bucket = months[doc.validatedAt.getMonth()];
+    const ht = Number(doc.totalHT);
+    const tva = Number(doc.totalTVA);
+    if (isSaleType(doc.type)) {
+      bucket.ventesHT += ht;
+      bucket.tvaCollectee += tva;
+      bucket.timbre += Number(doc.stampDuty);
+    } else if (doc.type === 'RETOUR_CLIENT') {
+      bucket.ventesHT -= ht;
+      bucket.tvaCollectee -= tva;
+    } else if (doc.type === 'ACHAT') {
+      bucket.achatsHT += ht;
+      bucket.tvaDeductible += tva;
+    } else if (doc.type === 'RETOUR_FOURNISSEUR') {
+      bucket.achatsHT -= ht;
+      bucket.tvaDeductible -= tva;
+    }
+  }
+
+  return months.map((m) => ({ ...m, tvaAPayer: m.tvaCollectee - m.tvaDeductible }));
+}

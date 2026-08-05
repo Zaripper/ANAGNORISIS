@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const userRoles = ['ADMINISTRATEUR', 'CAISSIER', 'AGENT'] as const;
 export const documentTypes = [
   'ACHAT',
+  'COMMANDE',
   'BON_PREPARATION',
   'VENTE',
   'FACTURE',
@@ -39,6 +40,7 @@ export const pumpRecalculatingTypes: DocumentType[] = ['ACHAT'];
 // transfers) and quotes (proforma) have no commercial counterpart.
 export const partnerRequiredTypes: DocumentType[] = [
   'ACHAT',
+  'COMMANDE',
   'BON_PREPARATION',
   'VENTE',
   'FACTURE',
@@ -69,12 +71,65 @@ export function ledgerEffect(type: DocumentType): LedgerEffect {
     case 'RETOUR_CLIENT':
       return { partnerBalanceSign: -1, cashType: 'DEPENSE' }; // avoir vente: the client owes us less; we may refund cash
     default:
-      return { partnerBalanceSign: 0, cashType: null }; // PROFORMA, REGULE_PLUS, REGULE_MOINS, TRANSFERT
+      // PROFORMA (quote), COMMANDE (purchase order awaiting reception),
+      // REGULE_PLUS/MOINS and TRANSFERT (internal movements): no financial effect.
+      return { partnerBalanceSign: 0, cashType: null };
   }
 }
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+// ---------- Document totals (single source of truth) ----------
+// Both the server (persisting documents) and the client (live totals in editors
+// and the POS) compute through these functions, so a displayed total can never
+// disagree with what gets stored.
+
+export const TIMBRE_MIN = 5.0;
+export const TIMBRE_MAX = 2500.0;
+
+/** Algerian timbre fiscal: 1% of the pre-stamp TTC, cash payments only, clamped to [5, 2500] DZD. */
+export function fiscalStamp(preStampTotalTTC: number, paymentMode: PaymentMode): number {
+  if (paymentMode !== 'ESPECE' || preStampTotalTTC <= 0) return 0;
+  return clamp(Math.round(preStampTotalTTC * 0.01 * 100) / 100, TIMBRE_MIN, TIMBRE_MAX);
+}
+
+export interface TotalsLine {
+  quantity: number;
+  unitPriceHT: number;
+  /** Per-line discount in percent (0-100). */
+  discountPercent: number;
+  tvaRate: number;
+  /** Weighted-average cost snapshot used for the margin figures. */
+  purchaseCostPUMP: number;
+}
+
+export interface DocTotals {
+  totalHT: number;
+  totalTVA: number;
+  stampDuty: number;
+  totalTTC: number;
+  marginHT: number;
+  marginPercent: number;
+}
+
+export function computeDocTotals(lines: TotalsLine[], remise: number, paymentMode: PaymentMode): DocTotals {
+  let totalHT = 0;
+  let totalTVA = 0;
+  let purchaseTotal = 0;
+  for (const l of lines) {
+    const lineHT = l.quantity * l.unitPriceHT * (1 - l.discountPercent / 100);
+    totalHT += lineHT;
+    totalTVA += lineHT * (l.tvaRate / 100);
+    purchaseTotal += l.quantity * l.purchaseCostPUMP;
+  }
+  const preStampTTC = totalHT - remise + totalTVA;
+  const stampDuty = fiscalStamp(preStampTTC, paymentMode);
+  const totalTTC = preStampTTC + stampDuty;
+  const marginHT = totalHT - purchaseTotal;
+  const marginPercent = totalHT > 0 ? (marginHT / totalHT) * 100 : 0;
+  return { totalHT, totalTVA, stampDuty, totalTTC, marginHT, marginPercent };
 }
 
 // ---------- Auth ----------
@@ -258,3 +313,29 @@ export const createCashTransactionSchema = z.object({
   bankName: z.string().optional().nullable()
 });
 export type CreateCashTransactionInput = z.infer<typeof createCashTransactionSchema>;
+
+// ---------- Users (admin-managed accounts) ----------
+export const createUserSchema = z.object({
+  username: z
+    .string()
+    .min(3)
+    .max(40)
+    .regex(/^[a-zA-Z0-9._-]+$/, 'USERNAME_INVALID_CHARS'),
+  password: z.string().min(6, 'PASSWORD_TOO_SHORT'),
+  role: z.enum(userRoles),
+  active: z.boolean().default(true)
+});
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+/** Password omitted = unchanged. Role/active edits are how accounts are promoted or retired. */
+export const updateUserSchema = z.object({
+  password: z.string().min(6, 'PASSWORD_TOO_SHORT').optional(),
+  role: z.enum(userRoles).optional(),
+  active: z.boolean().optional()
+});
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+// ---------- Application settings ----------
+/** Flat key/value map; keys are dot-namespaced (company.*, print.*). */
+export const updateSettingsSchema = z.record(z.string().min(1).max(80), z.string().max(2000));
+export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
