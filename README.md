@@ -81,7 +81,13 @@ npm run db:seed
 npm run dev
 ```
 
-Starts the API on `:5000` and the desktop client together.
+Starts the API on `:5000`, the Vite dev server on `:5173`, and opens the
+Electron window (with DevTools attached). Hot reload applies to both the API and
+the UI.
+
+To work in a normal browser instead of the Electron window, open
+<http://localhost:5173> — the app is identical there, which is handy for
+debugging.
 
 Default seeded login: `admin` / `admin123` — **change this before any real use.**
 
