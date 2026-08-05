@@ -5,6 +5,7 @@ import {
   cancelDocument,
   createDocument,
   deleteDraftDocument,
+  factureFromBonLivraison,
   receiveCommande,
   updateDraftDocument,
   validateDocument
@@ -566,5 +567,187 @@ describe('document references', () => {
 
     const refs = results.map((r) => r.reference);
     expect(new Set(refs).size).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bon de livraison → facture
+// ---------------------------------------------------------------------------
+describe('bon de livraison et sa facture', () => {
+  async function deliveredBL() {
+    const bl = await createDocument({
+      type: 'BON_LIVRAISON',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'CHEQUE',
+      remise: 0,
+      lines: [lineOf(f.articleA.id, f.depotMain.id, 10, 150)]
+    } as never);
+    return validateDocument(bl.id, f.user.id);
+  }
+
+  it('le bon de livraison sort le stock et debite le compte client', async () => {
+    const bl = await deliveredBL();
+
+    expect(bl.reference).toMatch(/BL\d{6}$/);
+    expect(await stockOf(f.articleA.id, f.depotMain.id)).toEqual({ qtyInStock: 90, qtyReserved: 0 });
+    expect(await balanceOf(f.client.id)).toBeCloseTo(1785, 6);
+  });
+
+  it("la facture emise depuis un BL ne rededuit ni le stock ni le solde", async () => {
+    const bl = await deliveredBL();
+    const facture = await factureFromBonLivraison(bl.id, f.user.id);
+
+    expect(facture.type).toBe('FACTURE');
+    expect(facture.status).toBe('VALIDE');
+    expect(facture.sourceDocumentId).toBe(bl.id);
+    // Les montants sont repris a l'identique...
+    expect(Number(facture.totalTTC)).toBeCloseTo(Number(bl.totalTTC), 6);
+    // ...mais rien n'est reimpute: c'est tout l'enjeu de la relation BL -> facture.
+    expect(await stockOf(f.articleA.id, f.depotMain.id)).toEqual({ qtyInStock: 90, qtyReserved: 0 });
+    expect(await balanceOf(f.client.id)).toBeCloseTo(1785, 6);
+  });
+
+  it('revalider la facture issue du BL reste sans effet', async () => {
+    const bl = await deliveredBL();
+    const facture = await factureFromBonLivraison(bl.id);
+
+    await validateDocument(facture.id);
+
+    expect((await stockOf(f.articleA.id, f.depotMain.id)).qtyInStock).toBe(90);
+    expect(await balanceOf(f.client.id)).toBeCloseTo(1785, 6);
+  });
+
+  it('un bon de livraison ne peut etre facture deux fois', async () => {
+    const bl = await deliveredBL();
+    await factureFromBonLivraison(bl.id);
+
+    await expect(factureFromBonLivraison(bl.id)).rejects.toThrow('BON_LIVRAISON_ALREADY_INVOICED');
+    expect(await prisma.document.count({ where: { type: 'FACTURE' } })).toBe(1);
+  });
+
+  it('refuse de facturer un bon de livraison non valide', async () => {
+    const bl = await createDocument({
+      type: 'BON_LIVRAISON',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'CHEQUE',
+      remise: 0,
+      lines: [lineOf(f.articleA.id, f.depotMain.id, 5, 150)]
+    } as never);
+
+    await expect(factureFromBonLivraison(bl.id)).rejects.toThrow('BON_LIVRAISON_NOT_VALIDATED');
+  });
+
+  it("refuse de facturer un document qui n'est pas un bon de livraison", async () => {
+    const vente = await createDocument({
+      type: 'VENTE',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'CHEQUE',
+      remise: 0,
+      lines: [lineOf(f.articleA.id, f.depotMain.id, 1, 150)]
+    } as never);
+
+    await expect(factureFromBonLivraison(vente.id)).rejects.toThrow('NOT_A_BON_LIVRAISON');
+  });
+
+  it("annuler la facture ne contrepasse rien: c'est le BL qui porte les effets", async () => {
+    const bl = await deliveredBL();
+    const facture = await factureFromBonLivraison(bl.id);
+
+    const cancelled = await cancelDocument(facture.id);
+
+    expect(cancelled.status).toBe('ANNULE');
+    // Stock et solde restent ceux imputes par le BL: aucune contrepassation en double.
+    expect((await stockOf(f.articleA.id, f.depotMain.id)).qtyInStock).toBe(90);
+    expect(await balanceOf(f.client.id)).toBeCloseTo(1785, 6);
+
+    // C'est l'annulation du BL lui-meme qui restitue le stock et le solde.
+    await cancelDocument(bl.id);
+    expect((await stockOf(f.articleA.id, f.depotMain.id)).qtyInStock).toBe(100);
+    expect(await balanceOf(f.client.id)).toBeCloseTo(0, 6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contingentement des produits rares
+// ---------------------------------------------------------------------------
+describe('contingentement (produits rares)', () => {
+  it('refuse une quantite superieure au maximum autorise par client', async () => {
+    await prisma.article.update({ where: { id: f.articleA.id }, data: { maxQtyPerClient: 3 } });
+
+    await expect(
+      createDocument({
+        type: 'BON_LIVRAISON',
+        partnerId: f.client.id,
+        depotId: f.depotMain.id,
+        paymentMode: 'CHEQUE',
+        remise: 0,
+        lines: [lineOf(f.articleA.id, f.depotMain.id, 4, 150)]
+      } as never)
+    ).rejects.toThrow(/RATIONED_ARTICLE:ART-A:3/);
+
+    // La tentative refusee ne doit rien avoir reserve.
+    expect(await stockOf(f.articleA.id, f.depotMain.id)).toEqual({ qtyInStock: 100, qtyReserved: 0 });
+  });
+
+  it('additionne les lignes du meme article avant de comparer au plafond', async () => {
+    await prisma.article.update({ where: { id: f.articleA.id }, data: { maxQtyPerClient: 3 } });
+
+    await expect(
+      createDocument({
+        type: 'BON_LIVRAISON',
+        partnerId: f.client.id,
+        depotId: f.depotMain.id,
+        paymentMode: 'CHEQUE',
+        remise: 0,
+        lines: [lineOf(f.articleA.id, f.depotMain.id, 2, 150), lineOf(f.articleA.id, f.depotMain.id, 2, 150)]
+      } as never)
+    ).rejects.toThrow(/RATIONED_ARTICLE/);
+  });
+
+  it('accepte la quantite exactement egale au plafond', async () => {
+    await prisma.article.update({ where: { id: f.articleA.id }, data: { maxQtyPerClient: 3 } });
+
+    const doc = await createDocument({
+      type: 'BON_LIVRAISON',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'CHEQUE',
+      remise: 0,
+      lines: [lineOf(f.articleA.id, f.depotMain.id, 3, 150)]
+    } as never);
+
+    expect((await stockOf(f.articleA.id, f.depotMain.id)).qtyReserved).toBe(3);
+    expect(doc.id).toBeTruthy();
+  });
+
+  it("ne contingente pas les entrees de stock: un achat n'est pas concerne", async () => {
+    await prisma.article.update({ where: { id: f.articleA.id }, data: { maxQtyPerClient: 3 } });
+
+    const achat = await createDocument({
+      type: 'ACHAT',
+      partnerId: f.supplier.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'VIREMENT',
+      remise: 0,
+      lines: [lineOf(f.articleA.id, f.depotMain.id, 500, 100)]
+    } as never);
+
+    expect(achat.id).toBeTruthy();
+  });
+
+  it("un article sans plafond n'est jamais limite", async () => {
+    const doc = await createDocument({
+      type: 'BON_LIVRAISON',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'CHEQUE',
+      remise: 0,
+      lines: [lineOf(f.articleA.id, f.depotMain.id, 90, 150)]
+    } as never);
+
+    expect(doc.id).toBeTruthy();
   });
 });

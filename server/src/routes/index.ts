@@ -5,6 +5,7 @@ import {
   cancelDocument,
   createDocument,
   deleteDraftDocument,
+  factureFromBonLivraison,
   receiveCommande,
   updateDraftDocument,
   validateDocument
@@ -205,6 +206,8 @@ api.post('/articles', requireRole('ADMINISTRATEUR'), async (req, res) => {
         pump: input.pump,
         tvaRate: input.tvaRate,
         seuilReappro: input.seuilReappro ?? null,
+        preferred: input.preferred ?? false,
+        maxQtyPerClient: input.maxQtyPerClient ?? null,
         prices: { create: input.prices }
       },
       include: { prices: { include: { category: true } } }
@@ -619,6 +622,15 @@ api.get('/articles/:id/movements', async (req, res) => {
 api.post('/documents/:id/receive', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
   try {
     res.json(await receiveCommande(req.params.id, req.user?.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Facturation d'un bon de livraison ----------
+api.post('/documents/:id/facturer', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
+  try {
+    res.status(201).json(await factureFromBonLivraison(req.params.id, req.user?.id));
   } catch (error) {
     handleError(res, error);
   }

@@ -36,6 +36,8 @@ function typePrefix(type: string) {
       return 'AC';
     case 'COMMANDE':
       return 'CM';
+    case 'BON_LIVRAISON':
+      return 'BL';
     case 'BON_PREPARATION':
       return 'BP';
     case 'VENTE':
@@ -168,6 +170,30 @@ async function adjustReservations(tx: Tx, type: DocumentType, lines: ComputedLin
   }
 }
 
+
+/**
+ * Contingentement: certains articles rares ont une quantite maximale par client
+ * et par document, pour eviter qu'un seul client rafle tout le stock disponible
+ * en laissant les references qui ne partent pas.
+ *
+ * Le controle est fait cote serveur: le desactiver depuis l'interface ne suffit
+ * pas a le contourner.
+ */
+async function enforceRationing(tx: Tx, type: DocumentType, lines: CreateDocumentInput['lines']) {
+  if (!isConsuming(type)) return;
+  const byArticle = new Map<string, number>();
+  for (const line of lines) {
+    byArticle.set(line.articleId, (byArticle.get(line.articleId) ?? 0) + line.quantity);
+  }
+  for (const [articleId, quantity] of byArticle) {
+    const article = await tx.article.findUnique({ where: { id: articleId } });
+    if (!article?.maxQtyPerClient) continue;
+    if (quantity > article.maxQtyPerClient) {
+      throw new Error(`RATIONED_ARTICLE:${article.code}:${article.maxQtyPerClient}`);
+    }
+  }
+}
+
 export async function createDocument(input: CreateDocumentInput, createdById?: string) {
   return prisma.$transaction(async (tx) => {
     if (input.partnerId) {
@@ -178,6 +204,8 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
       const destDepot = await tx.depot.findUnique({ where: { id: input.destDepotId } });
       if (!destDepot) throw new Error('DEST_DEPOT_NOT_FOUND');
     }
+
+    await enforceRationing(tx, input.type, input.lines);
 
     const lines = await computeLines(tx, input.lines);
     const summary = summarize(lines, input.remise, input.paymentMode);
@@ -309,6 +337,19 @@ export async function validateDocument(documentId: string, validatedById?: strin
     if (document.status === 'ANNULE') throw new Error('DOCUMENT_CANCELLED');
 
     const type = document.type as DocumentType;
+
+    /**
+     * Une facture emise depuis un bon de livraison ne doit RIEN reimputer: le BL
+     * a deja sorti le stock et debite le compte client. Sans ce garde-fou chaque
+     * livraison serait comptee deux fois (stock et solde).
+     */
+    if (document.sourceDocumentId) {
+      return tx.document.update({
+        where: { id: document.id },
+        data: { status: 'VALIDE', validatedAt: new Date(), createdById: validatedById ?? document.createdById },
+        include: { lines: true, partner: true, depot: true, destDepot: true }
+      });
+    }
 
     for (const line of document.lines) {
       const stock = await tx.articleStock.findUnique({
@@ -454,6 +495,20 @@ export async function cancelDocument(documentId: string) {
 
     const type = document.type as DocumentType;
 
+    /**
+     * Symetrique du garde-fou de validation: une facture emise depuis un bon de
+     * livraison n'a jamais impute ni stock ni solde, il n'y a donc rien a
+     * contrepasser. On se contente de l'annuler. Le BL source, lui, reste
+     * annulable separement et c'est lui qui porte la contrepassation reelle.
+     */
+    if (document.sourceDocumentId) {
+      return tx.document.update({
+        where: { id: documentId },
+        data: { status: 'ANNULE', cancelledAt: new Date() },
+        include: { lines: true, partner: true, depot: true, destDepot: true }
+      });
+    }
+
     for (const line of document.lines) {
       if (isTransfer(type)) {
         if (!document.destDepotId) throw new Error('DEST_DEPOT_REQUIRED_FOR_TRANSFER');
@@ -577,4 +632,62 @@ export async function receiveCommande(commandeId: string, receivedById?: string)
   });
 
   return { commande: updatedCommande, achat: validated };
+}
+
+/**
+ * Emet la facture d'un bon de livraison valide (relation 1 BL -> 1 facture).
+ *
+ * La facture reprend a l'identique les lignes et les totaux du BL, mais porte
+ * `sourceDocumentId`: sa validation n'a donc aucun effet sur le stock ni sur le
+ * solde client, deja imputes par le bon de livraison. La contrainte d'unicite
+ * sur `sourceDocumentId` empeche d'emettre deux factures pour un meme BL, y
+ * compris en cas de double clic ou de requetes concurrentes.
+ */
+export async function factureFromBonLivraison(blId: string, createdById?: string) {
+  return prisma.$transaction(async (tx) => {
+    const bl = await tx.document.findUnique({ where: { id: blId }, include: { lines: true, facture: true } });
+    if (!bl) throw new Error('DOCUMENT_NOT_FOUND');
+    if (bl.type !== 'BON_LIVRAISON') throw new Error('NOT_A_BON_LIVRAISON');
+    if (bl.status !== 'VALIDE') throw new Error('BON_LIVRAISON_NOT_VALIDATED');
+    if (bl.facture) throw new Error('BON_LIVRAISON_ALREADY_INVOICED');
+
+    const reference = await nextReference(tx, 'FACTURE');
+
+    return tx.document.create({
+      data: {
+        type: 'FACTURE',
+        reference,
+        status: 'VALIDE',
+        validatedAt: new Date(),
+        sourceDocumentId: bl.id,
+        partnerId: bl.partnerId,
+        livreurId: bl.livreurId,
+        depotId: bl.depotId,
+        paymentMode: bl.paymentMode,
+        motif: `Facturation du bon de livraison ${bl.reference}`,
+        totalHT: bl.totalHT,
+        remise: bl.remise,
+        totalTVA: bl.totalTVA,
+        stampDuty: bl.stampDuty,
+        totalTTC: bl.totalTTC,
+        marginHT: bl.marginHT,
+        marginPercent: bl.marginPercent,
+        createdById: createdById ?? null,
+        lines: {
+          create: bl.lines.map((l) => ({
+            articleId: l.articleId,
+            depotId: l.depotId,
+            quantity: l.quantity,
+            unitPriceHT: l.unitPriceHT,
+            discountPercent: l.discountPercent,
+            tvaRate: l.tvaRate,
+            totalHT: l.totalHT,
+            totalTTC: l.totalTTC,
+            purchaseCostPUMP: l.purchaseCostPUMP
+          }))
+        }
+      },
+      include: { lines: true, partner: true, depot: true }
+    });
+  }, TX_OPTIONS);
 }

@@ -18,6 +18,9 @@ enum DocumentType {
   /// Purchase order to a supplier. No stock or ledger effect of its own —
   /// receiving it generates a real ACHAT (see receiveCommande).
   COMMANDE
+  /// Bon de livraison: sort le stock et debite le compte client. La facture
+  /// emise a partir d'un BL ne refait ni l'un ni l'autre (voir sourceDocumentId).
+  BON_LIVRAISON
   BON_PREPARATION
   VENTE
   FACTURE
@@ -184,6 +187,11 @@ model Article {
   tvaRate     Decimal        @default(19.0)
   seuilReappro Int?
   active      Boolean        @default(true)
+  /// Article mis en avant a la caisse (onglet Preferes).
+  preferred   Boolean        @default(false)
+  /// Contingentement des produits rares: quantite maximale qu'un meme client peut
+  /// prendre sur un document. null = pas de limite.
+  maxQtyPerClient Int?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   prices      ArticlePrice[]
@@ -243,6 +251,12 @@ model Document {
   marginHT           Decimal           @default(0.0)
   marginPercent      Decimal           @default(0.0)
   motif              String?
+  /// Document d'origine (facture emise depuis un bon de livraison). Quand il est
+  /// renseigne, la validation n'a AUCUN effet stock ni comptable: tout a deja ete
+  /// impute par le document source. Sans cela chaque livraison serait comptee deux fois.
+  sourceDocumentId   String?           @unique
+  sourceDocument     Document?         @relation("DocumentFacturation", fields: [sourceDocumentId], references: [id])
+  facture            Document?         @relation("DocumentFacturation")
   createdById        String?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt

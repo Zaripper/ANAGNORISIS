@@ -88,6 +88,10 @@ export interface Article {
   priceHT: number; // display price for the currently selected partner's category tier
   tvaRate: number;
   seuilReappro?: number | null;
+  /** Mis en avant a la caisse (onglet Preferes). */
+  preferred?: boolean;
+  /** Quantite maximale par client et par document (produits rares). */
+  maxQtyPerClient?: number | null;
   stockGlobal: number; // summed available stock (in stock - reserved) across all depots
   pricesByCategory: Record<string, { priceHT: number; priceTTC: number }>;
   stocksByDepot: Record<string, { qtyInStock: number; qtyReserved: number }>;
@@ -183,6 +187,7 @@ type ERPView = ScreenId | null;
 
 type BackendDocumentType =
   | 'ACHAT'
+  | 'BON_LIVRAISON'
   | 'BON_PREPARATION'
   | 'FACTURE'
   | 'PROFORMA'
@@ -204,6 +209,8 @@ function viewToDocumentType(view: ERPView): BackendDocumentType {
       return 'FACTURE';
     case 'PROFORMA':
       return 'PROFORMA';
+    case 'BONS_LIVRAISON':
+      return 'BON_LIVRAISON';
     case 'BONS_PREP':
     case 'VENTES_VALIDATION':
     default:
@@ -2561,6 +2568,27 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   const [settings, setSettings] = useState<CompanySettings>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  /**
+   * Émet la facture d'un bon de livraison validé. Le serveur crée une facture
+   * liée au BL: elle reprend ses montants mais n'a aucun effet sur le stock ni
+   * sur le solde client, déjà imputés par le bon de livraison.
+   */
+  async function handleFacturerBL(blId: string) {
+    try {
+      const facture = await apiRequest<{ id: string; reference: string }>(`/documents/${blId}/facturer`, { method: 'POST' });
+      await refreshAll();
+      setNotice(`Facture ${facture.reference} émise.`);
+      handlePrintDocument(facture.id);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : '';
+      setNotice(
+        code === 'BON_LIVRAISON_ALREADY_INVOICED'
+          ? 'Ce bon de livraison a déjà été facturé.'
+          : "Facturation impossible."
+      );
+    }
+  }
+
   /** Fetches the full document (lines + article info) and sends it to the printer as an A4 bon/facture. */
   async function handlePrintDocument(docId: string) {
     try {
@@ -2727,6 +2755,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         pump: num(a.pump),
         tvaRate: num(a.tvaRate),
         seuilReappro: a.seuilReappro ?? null,
+        preferred: Boolean(a.preferred),
+        maxQtyPerClient: a.maxQtyPerClient ?? null,
         priceHT: tierPrice ?? num(a.pump),
         stockGlobal: totalAvailable,
         pricesByCategory,
@@ -2821,6 +2851,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
     if (currentView === 'AVOIRS_VENTES') return d.type === 'RETOUR_CLIENT';
     if (currentView === 'FACTURE') return d.type === 'FACTURE';
     if (currentView === 'PROFORMA') return d.type === 'PROFORMA';
+    if (currentView === 'BONS_LIVRAISON') return d.type === 'BON_LIVRAISON';
     return false;
   });
 
@@ -2926,7 +2957,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
       currentView === 'AVOIRS_ACHATS' ||
       currentView === 'AVOIRS_VENTES' ||
       currentView === 'FACTURE' ||
-      currentView === 'PROFORMA';
+      currentView === 'PROFORMA' ||
+      currentView === 'BONS_LIVRAISON';
 
     setSaving(true);
     setNotice(null);
@@ -3359,7 +3391,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           currentView === 'AVOIRS_ACHATS' ||
           currentView === 'AVOIRS_VENTES' ||
           currentView === 'FACTURE' ||
-          currentView === 'PROFORMA') && (
+          currentView === 'PROFORMA' ||
+          currentView === 'BONS_LIVRAISON') && (
           <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-7xl mx-auto w-full z-10">
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -3372,6 +3405,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                     {currentView === 'AVOIRS_VENTES' && 'Avoir Vente (Retour Client)'}
                     {currentView === 'FACTURE' && 'Facture Client'}
                     {currentView === 'PROFORMA' && 'Facture Proforma (Devis)'}
+                    {currentView === 'BONS_LIVRAISON' && 'Bon de Livraison'}
                   </span>
                   <span className="text-slate-400 font-mono text-xs">
                     Réf: {viewingDocDetail?.reference ?? docReference ?? '(nouveau)'}
@@ -3417,6 +3451,16 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                       className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold px-4 py-2 rounded-xl transition text-xs"
                     >
                       🖨 Imprimer
+                    </button>
+                  )}
+                  {/* Un BL validé se facture en un clic; la facture reprend ses montants
+                      sans réimputer le stock ni le solde (déjà faits par le BL). */}
+                  {viewingDocDetail?.type === 'BON_LIVRAISON' && viewingDocDetail.status === 'VALIDE' && (
+                    <button
+                      onClick={() => handleFacturerBL(viewingDocDetail.id)}
+                      className="bg-[#0F5B38] hover:bg-[#0b462b] text-white font-semibold px-4 py-2 rounded-xl transition text-xs"
+                    >
+                      Facturer
                     </button>
                   )}
                   {viewingDocDetail?.status === 'OUVERT' && (

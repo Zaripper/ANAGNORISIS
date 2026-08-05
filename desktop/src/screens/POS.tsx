@@ -68,6 +68,8 @@ export function POSScreen({
     cartRef.current = next;
     setCart(next);
   }
+  // Onglet du catalogue: tous les articles, ou seulement les preferes.
+  const [tab, setTab] = useState<'TOUS' | 'PREFERES'>('TOUS');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('ESPECE');
   const [tendered, setTendered] = useState<string>('');
   const [paying, setPaying] = useState(false);
@@ -100,6 +102,11 @@ export function POSScreen({
       toasts.error(`Stock insuffisant pour ${article.code} — disponible: ${available}.`);
       return;
     }
+    // Produits rares: le serveur refuserait de toute facon, autant le dire tout de suite.
+    if (article.maxQtyPerClient && wanted > article.maxQtyPerClient) {
+      toasts.error(`${article.code} est limite a ${article.maxQtyPerClient} par client.`);
+      return;
+    }
     if (inCart) {
       commitCart(current.map((l) => (l.articleId === article.id ? { ...l, quantity: l.quantity + qty } : l)));
     } else {
@@ -124,11 +131,16 @@ export function POSScreen({
   /** The scan bar filters the product grid live; empty query shows the whole catalogue. */
   const gridArticles = useMemo(() => {
     const q = scan.trim().toLowerCase();
-    if (!q) return articles;
-    return articles.filter(
+    // Une recherche explicite porte toujours sur tout le catalogue: on ne veut pas
+    // qu'un article introuvable le soit seulement a cause de l'onglet actif.
+    const pool = q || tab === 'TOUS' ? articles : articles.filter((a) => a.preferred);
+    if (!q) return pool;
+    return pool.filter(
       (a) => a.code.toLowerCase().includes(q) || a.designation.toLowerCase().includes(q) || (a.barcode ?? '').includes(q)
     );
-  }, [scan, articles]);
+  }, [scan, articles, tab]);
+
+  const preferredCount = useMemo(() => articles.filter((a) => a.preferred).length, [articles]);
 
   /** Exact barcode first (what a scanner emits), then exact code, then unique grid match. */
   function resolveScan(raw: string): Article | null {
@@ -302,6 +314,22 @@ export function POSScreen({
           />
         </div>
 
+        {preferredCount > 0 && (
+          <div className="flex gap-1.5 shrink-0">
+            {(['TOUS', 'PREFERES'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition ${
+                  tab === t ? 'bg-[#0F5B38] text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {t === 'TOUS' ? `Tout le catalogue (${articles.length})` : `Preferes (${preferredCount})`}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
             {gridArticles.map((a) => {
@@ -324,7 +352,10 @@ export function POSScreen({
                     >
                       {a.designation.slice(0, 2).toUpperCase()}
                     </div>
-                    <Badge tone={out ? 'danger' : available <= 5 ? 'warning' : 'success'}>{available}</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge tone={out ? 'danger' : available <= 5 ? 'warning' : 'success'}>{available}</Badge>
+                      {a.maxQtyPerClient ? <Badge tone="info">max {a.maxQtyPerClient}</Badge> : null}
+                    </div>
                   </div>
                   <div className="text-[11px] font-semibold text-slate-800 leading-snug line-clamp-2 min-h-[2.1em]">{a.designation}</div>
                   <div className="flex items-end justify-between mt-auto">

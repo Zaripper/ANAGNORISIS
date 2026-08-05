@@ -4,6 +4,7 @@ export const userRoles = ['ADMINISTRATEUR', 'CAISSIER', 'AGENT'] as const;
 export const documentTypes = [
   'ACHAT',
   'COMMANDE',
+  'BON_LIVRAISON',
   'BON_PREPARATION',
   'VENTE',
   'FACTURE',
@@ -28,7 +29,14 @@ export type CashTxType = (typeof cashTxTypes)[number];
 // Types that add quantity to stock at validation (draft creation never touches physical stock)
 export const stockReceivingTypes: DocumentType[] = ['ACHAT', 'RETOUR_CLIENT', 'REGULE_PLUS'];
 // Types that reserve at draft time and remove quantity from stock at validation
-export const stockConsumingTypes: DocumentType[] = ['BON_PREPARATION', 'VENTE', 'FACTURE', 'RETOUR_FOURNISSEUR', 'REGULE_MOINS'];
+export const stockConsumingTypes: DocumentType[] = [
+  'BON_LIVRAISON',
+  'BON_PREPARATION',
+  'VENTE',
+  'FACTURE',
+  'RETOUR_FOURNISSEUR',
+  'REGULE_MOINS'
+];
 // TRANSFERT is handled on its own: it both removes (source depotId) and adds (destDepotId) stock.
 
 // Only a true purchase re-bases the weighted-average cost (P.U.M.P). A client return or a
@@ -41,6 +49,7 @@ export const pumpRecalculatingTypes: DocumentType[] = ['ACHAT'];
 export const partnerRequiredTypes: DocumentType[] = [
   'ACHAT',
   'COMMANDE',
+  'BON_LIVRAISON',
   'BON_PREPARATION',
   'VENTE',
   'FACTURE',
@@ -62,6 +71,7 @@ export function ledgerEffect(type: DocumentType): LedgerEffect {
   switch (type) {
     case 'ACHAT':
       return { partnerBalanceSign: 1, cashType: 'DEPENSE' }; // we owe the supplier more; cash goes out if paid immediately
+    case 'BON_LIVRAISON':
     case 'BON_PREPARATION':
     case 'VENTE':
     case 'FACTURE':
@@ -210,6 +220,10 @@ export const createArticleSchema = z.object({
   pump: z.number().nonnegative().default(0),
   tvaRate: z.number().nonnegative().default(19),
   seuilReappro: z.number().int().nonnegative().optional().nullable(),
+  // Mise en avant a la caisse.
+  preferred: z.boolean().optional(),
+  // Contingentement des produits rares: max par client et par document.
+  maxQtyPerClient: z.number().int().positive().optional().nullable(),
   prices: z
     .array(
       z.object({

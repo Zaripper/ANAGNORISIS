@@ -33,6 +33,7 @@ export type ScreenId =
   | 'CAISSE_POS'
   // Ventes
   | 'BONS_PREP'
+  | 'BONS_LIVRAISON'
   | 'VENTES_VALIDATION'
   | 'VALIDATION_BON_PREP'
   | 'FACTURE'
@@ -161,7 +162,8 @@ export const SCREENS: ScreenDef[] = [
 
   // ---------- Ventes ----------
   { id: 'BONS_PREP', label: 'Bons de commande', group: 'Ventes', keywords: 'commande client bc preparation reservation' },
-  { id: 'VALIDATION_BON_PREP', label: 'Validation des commandes', group: 'Ventes', keywords: 'valider bons attente queue livraison' },
+  { id: 'VALIDATION_BON_PREP', label: 'Validation des commandes', group: 'Ventes', keywords: 'valider bons attente queue' },
+  { id: 'BONS_LIVRAISON', label: 'Bons de livraison', group: 'Ventes', keywords: 'bl livraison expedition facturer' },
   { id: 'VENTES_VALIDATION', label: 'Ventes', group: 'Ventes', keywords: 'facturation sortie gros' },
   { id: 'FACTURE', label: 'Factures', group: 'Ventes', keywords: 'facturation client' },
   { id: 'PROFORMA', label: 'Proformas', group: 'Ventes', keywords: 'devis estimation quote' },
