@@ -6,41 +6,21 @@ import type { ScreenId } from '../ui/navigation';
 /**
  * Accueil — écran d'ouverture.
  *
- * Volontairement minimal: il accueille l'utilisateur et propose les trois points
- * d'entrée du quotidien. Aucun traitement n'est lancé à l'ouverture; tout le
- * reste passe par le rail de modules ou la recherche (Ctrl+K).
+ * Un fond vert très clair frappé du logo en filigrane, le message de bienvenue,
+ * et trois raccourcis compacts vers le travail quotidien. Rien n'est lancé à
+ * l'ouverture; tout le reste passe par le rail de modules ou Ctrl+K.
  */
 
 interface Tile {
   id: ScreenId;
   label: string;
-  hint: string;
   icon: LucideIcon;
-  color: string;
 }
 
 const TILES: Tile[] = [
-  {
-    id: 'CAISSE_POS',
-    label: 'Caisse',
-    hint: 'Vente au comptoir',
-    icon: ScanBarcode,
-    color: '#0F5B38'
-  },
-  {
-    id: 'BONS_PREP',
-    label: 'Bon de commande',
-    hint: 'Commande client',
-    icon: ClipboardList,
-    color: '#1D4ED8'
-  },
-  {
-    id: 'STOCKS',
-    label: 'Stock',
-    hint: 'Stocks par dépôt',
-    icon: Boxes,
-    color: '#B45309'
-  }
+  { id: 'CAISSE_POS', label: 'Caisse', icon: ScanBarcode },
+  { id: 'BONS_PREP', label: 'Bon de commande', icon: ClipboardList },
+  { id: 'STOCKS', label: 'Stock', icon: Boxes }
 ];
 
 export function AccueilScreen({ username, onNavigate }: { username?: string; onNavigate: (id: ScreenId) => void }) {
@@ -49,12 +29,15 @@ export function AccueilScreen({ username, onNavigate }: { username?: string; onN
   const greeting = hour < 13 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center">
-      <div className="w-full max-w-4xl flex flex-col items-center gap-10 py-8">
-        {/* Accueil */}
-        <div className="flex flex-col items-center text-center">
-          <DjemroudLogo className="w-16 h-16 text-[#0F5B38]" />
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mt-4">
+    <div className="flex-1 min-h-0 relative rounded-2xl overflow-hidden bg-[#0F5B38]/[0.045] flex items-center justify-center">
+      {/* Logo en filigrane: décoratif, il ne doit jamais intercepter un clic. */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-hidden="true">
+        <DjemroudLogo className="w-[32rem] h-[32rem] text-[#0F5B38] opacity-[0.05]" />
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center gap-8 px-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
             {greeting}
             {username ? `, ${username}` : ''}
           </h1>
@@ -65,30 +48,29 @@ export function AccueilScreen({ username, onNavigate }: { username?: string; onN
           </p>
         </div>
 
-        {/* Les trois points d'entrée du quotidien */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full">
+        <div className="flex items-start justify-center gap-4">
           {TILES.map((t) => {
             const Icon = t.icon;
             return (
               <button
                 key={t.id}
                 onClick={() => onNavigate(t.id)}
-                style={{ backgroundColor: t.color }}
-                className="aspect-square rounded-3xl text-white flex flex-col items-center justify-center gap-3 px-4 text-center shadow-md transition-all duration-150 hover:shadow-xl hover:-translate-y-1 active:translate-y-0 active:shadow-md"
+                className="group w-28 flex flex-col items-center gap-2"
               >
-                <Icon className="w-12 h-12" strokeWidth={1.4} />
-                <div>
-                  <div className="text-base font-bold leading-tight">{t.label}</div>
-                  <div className="text-[11px] font-medium opacity-75 mt-0.5">{t.hint}</div>
-                </div>
+                <span className="w-16 h-16 rounded-2xl bg-white border border-[#0F5B38]/15 text-[#0F5B38] flex items-center justify-center shadow-sm transition-all duration-150 group-hover:bg-[#0F5B38] group-hover:text-white group-hover:shadow-md group-hover:-translate-y-0.5 group-active:translate-y-0">
+                  <Icon className="w-7 h-7" strokeWidth={1.6} />
+                </span>
+                <span className="text-[11px] font-semibold text-slate-600 text-center leading-tight group-hover:text-slate-900">
+                  {t.label}
+                </span>
               </button>
             );
           })}
         </div>
 
         <p className="text-[11px] text-slate-400 text-center">
-          <kbd className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Ctrl</kbd> +{' '}
-          <kbd className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">K</kbd> pour accéder à tous les écrans
+          <kbd className="font-mono bg-white/70 border border-slate-200 px-1.5 py-0.5 rounded">Ctrl</kbd> +{' '}
+          <kbd className="font-mono bg-white/70 border border-slate-200 px-1.5 py-0.5 rounded">K</kbd> pour accéder à tous les écrans
         </p>
       </div>
     </div>
