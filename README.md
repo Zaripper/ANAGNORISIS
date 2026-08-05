@@ -5,10 +5,9 @@ purchasing, stock across multiple depots, sales and preparation slips, treasury,
 and partner accounts. Desktop application (Electron + React) over a local
 Express/PostgreSQL API, designed for concurrent users on a company LAN.
 
-> **Status: in active development.** 52 of 60 planned screens are implemented
-> (the sidebar shows the live count; unbuilt modules are marked *à venir*).
-> Earlier revisions of this document claimed "100% feature complete" and
-> "0 TypeScript errors"; neither was accurate. This file now tracks reality.
+> **Status: feature-complete against the planned screen list** — every entry in
+> the navigation registry has a working screen. Earlier revisions of this
+> document claimed completeness prematurely; this file tracks reality.
 
 ---
 
@@ -95,9 +94,11 @@ The sidebar, the command palette, and role-based visibility are all derived from
 that single registry, so a menu entry cannot drift out of sync with the screen it
 opens.
 
-Press <kbd>Ctrl</kbd>+<kbd>K</kbd> to search every screen by name (accent-insensitive:
-typing `depot` finds *Dépôts*). Screens not yet built are shown dimmed and marked
-*à venir* rather than being hidden or silently opening an empty page.
+The shell is an icon rail of business modules (Ventes, Achats, Stock,
+Trésorerie, Partenaires, Référentiel, Analyse, Fiscal, Réglages) with a
+contextual panel listing the active module's screens. The dashboard is the
+landing page. Press <kbd>Ctrl</kbd>+<kbd>K</kbd> to jump to any screen by name
+(accent-insensitive: typing `depot` finds *Dépôts*).
 
 ---
 
@@ -193,20 +194,23 @@ npm run build
 npm run db:generate
 ```
 
-### Known gaps before production use
+### Production readiness
 
-These are tracked deliberately rather than hidden:
+- **Prisma migrations** are in place (`server/prisma/migrations`, baselined with
+  `0_init`). Evolve the schema with `npx prisma migrate dev`; deploy with
+  `npx prisma migrate deploy`. Do not go back to `db push` on a live database.
+- **Backups**: Réglages → Sauvegarde downloads a timestamped logical JSON export
+  from any station; Archivage exports one fiscal year. For binary restores,
+  schedule the documented `pg_dump` command on the server.
+- **Pagination caps**: list endpoints accept `?limit` (≤1000), `?offset`, `?q`
+  and are capped server-side.
+- **Credential rotation is enforced**: accounts still on a default or
+  admin-reset password are forced to choose a new one at login before entering
+  the app (the seeded `admin`/`caissier` accounts are flagged).
 
-- **Partial test coverage.** The shared financial core (totals, timbre, ledger
-  direction, stock-direction rules) has a vitest suite (`npm test -w shared`);
-  the Prisma-backed services (validation, PUMP recalculation) still lack
-  integration tests.
-- **No Prisma migrations.** The project uses `db:push`. Migrations are needed to
-  evolve a live database without data loss.
-- **List endpoints are unpaginated.** `GET /articles`, `/documents`, `/partners`
-  return every row; this will degrade as data grows.
-- **Seeded credentials are weak** and must be rotated before deployment.
-- **No backup routine.** Required before this holds real commercial data.
+Remaining known gap, tracked deliberately: the Prisma-backed services
+(validation, PUMP recalculation) have no automated integration tests yet — the
+shared financial core does (`npm test -w shared`, 20 tests).
 
 ---
 

@@ -11,12 +11,12 @@ async function main() {
   await prisma.user.upsert({
     where: { username: 'admin' },
     update: { passwordHash: adminHash, role: 'ADMINISTRATEUR' },
-    create: { username: 'admin', passwordHash: adminHash, role: 'ADMINISTRATEUR' }
+    create: { username: 'admin', passwordHash: adminHash, role: 'ADMINISTRATEUR', mustChangePassword: true }
   });
   await prisma.user.upsert({
     where: { username: 'caissier' },
     update: { passwordHash: cashierHash, role: 'CAISSIER' },
-    create: { username: 'caissier', passwordHash: cashierHash, role: 'CAISSIER' }
+    create: { username: 'caissier', passwordHash: cashierHash, role: 'CAISSIER', mustChangePassword: true }
   });
 
   // 2. Depots (matching the depot names already hardcoded in the UI dropdown)

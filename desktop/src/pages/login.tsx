@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiRequest, ApiError, getServerUrl, setServerUrl } from '../services/apiClient';
+import { apiRequest, ApiError, getServerUrl, setServerUrl, setSession } from '../services/apiClient';
 import { DjemroudLogo } from '../components/AppShell';
 
 interface LoginProps {
@@ -18,6 +18,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [showServer, setShowServer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Forced rotation: default/reset passwords cannot enter the app until changed.
+  const [pendingSession, setPendingSession] = useState<{ token: string; user: unknown } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPassword2, setNewPassword2] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,10 +30,17 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setServerUrl(server);
 
     try {
-      const { token, user } = await apiRequest<{ token: string; user: unknown }>('/auth/login', {
-        method: 'POST',
-        body: { username, password }
-      });
+      const { token, user, mustChangePassword } = await apiRequest<{ token: string; user: unknown; mustChangePassword?: boolean }>(
+        '/auth/login',
+        { method: 'POST', body: { username, password } }
+      );
+      if (mustChangePassword) {
+        // Store the session so the change-password call is authenticated, but do
+        // not enter the app until the rotation is done.
+        setSession(token, user);
+        setPendingSession({ token, user });
+        return;
+      }
       onLoginSuccess(token, user);
     } catch (err: unknown) {
       setError(
@@ -43,8 +54,72 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword.length < 6) return setError('Le nouveau mot de passe doit faire au moins 6 caractères.');
+    if (newPassword !== newPassword2) return setError('Les deux saisies ne correspondent pas.');
+    setLoading(true);
+    try {
+      await apiRequest('/auth/change-password', { method: 'POST', body: { currentPassword: password, newPassword } });
+      if (pendingSession) onLoginSuccess(pendingSession.token, pendingSession.user);
+    } catch (err) {
+      setError(err instanceof ApiError && err.message === 'PASSWORD_UNCHANGED' ? 'Choisissez un mot de passe différent de l’actuel.' : 'Changement impossible. Réessayez.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (pendingSession) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[#F6F5F1] font-sans">
+        <form onSubmit={handleChangePassword} className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-sm p-8 text-xs anim-pop">
+          <div className="flex flex-col items-center mb-5 text-[#0F5B38]">
+            <DjemroudLogo className="w-14 h-14" />
+            <h1 className="font-extrabold text-base tracking-tight mt-2 text-slate-900">Nouveau mot de passe requis</h1>
+            <p className="text-slate-400 text-[11px] text-center mt-1">
+              Ce compte utilise encore un mot de passe par défaut. Choisissez-en un nouveau pour continuer.
+            </p>
+          </div>
+          {error && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-3 py-2.5 mb-4 font-medium">{error}</div>}
+          <label className="block mb-3">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Nouveau mot de passe</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoFocus
+              required
+              className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/40 focus:border-[#0F5B38]"
+            />
+          </label>
+          <label className="block mb-4">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Confirmer</span>
+            <input
+              type="password"
+              value={newPassword2}
+              onChange={(e) => setNewPassword2(e.target.value)}
+              required
+              className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/40 focus:border-[#0F5B38]"
+            />
+          </label>
+          <button type="submit" disabled={loading} className="w-full bg-[#0F5B38] hover:bg-[#0b462b] text-white font-bold rounded-xl py-3 transition disabled:opacity-50">
+            {loading ? 'Enregistrement…' : 'Changer et continuer'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSession(null, null); setPendingSession(null); setNewPassword(''); setNewPassword2(''); }}
+            className="mt-3 w-full text-slate-400 hover:text-slate-600 text-[10px] font-medium"
+          >
+            Annuler et revenir à la connexion
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-[#FAF9F6] font-sans">
+    <div className="h-screen w-screen flex items-center justify-center bg-[#F6F5F1] font-sans">
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-sm p-8 text-xs">
         <div className="flex flex-col items-center mb-6">
           <DjemroudLogo className="w-16 h-16" />

@@ -21,6 +21,8 @@ import { DocumentListScreen, MouvementArticleScreen, ReapproScreen, ValidationQu
 import { SettingsScreen, UsersScreen } from '../screens/Admin';
 import { InventaireScreen } from '../screens/Inventaire';
 import { CALivreursScreen, FiscalScreen } from '../screens/Analyse';
+import { GraphesScreen, MontantsBlocageScreen, SituationScreen } from '../screens/Insights';
+import { ArchivageScreen, SauvegardeScreen, TablesScreen } from '../screens/Maintenance';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -2450,7 +2452,8 @@ function AProposScreen() {
 // 4. MAIN APPLICATION COMPONENT
 // ==========================================
 export default function App({ onLogout }: { onLogout: () => void }) {
-  const [currentView, setCurrentView] = useState<ERPView>(null);
+  // The dashboard is the landing page — no empty watermark screen.
+  const [currentView, setCurrentView] = useState<ERPView>('TABLEAU_BORD');
   const [virementMode, setVirementMode] = useState<'RECETTE' | 'DEPENSE'>('RECETTE');
 
   // Identifies the signed-in user for the shell (name, role) and for role-gated
@@ -2932,18 +2935,6 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   return (
     <AppShell current={currentView} onNavigate={setCurrentView} user={currentUser} onLogout={onLogout}>
 
-        {currentView === null && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-            <div className="opacity-[0.06] transform scale-125 mb-4">
-              <DjemroudLogo className="w-96 h-96" />
-            </div>
-            <div className="opacity-[0.08] text-center">
-              <h2 className="text-4xl font-black text-slate-900 tracking-widest uppercase">ETS DJEMROUD</h2>
-              <p className="text-sm font-semibold text-slate-700 tracking-wider mt-1">DISTRIBUTION PRODUCTS PARAPHARMACEUTIQUE</p>
-            </div>
-          </div>
-        )}
-
         {/* ---------- PARTENAIRES ---------- */}
         {currentView === 'PARTENAIRES' && (
           <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
@@ -3064,7 +3055,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* ---------- ARTICLES / PRIX ---------- */}
-        {(currentView === 'PRIX_ARTICLES' || currentView === 'ARTICLES') && (
+        {currentView === 'ARTICLES' && (
           <PrixArticlesView articles={articles} categories={categories} depots={depots} />
         )}
 
@@ -3134,6 +3125,14 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {currentView === 'UTILISATEURS' && <UsersScreen currentUserId={currentUser?.id} />}
         {currentView === 'PARAMETRES' && <SettingsScreen onSaved={setSettings} />}
         {currentView === 'INVENTAIRES' && <InventaireScreen articles={articles} depots={depots} onSaved={refreshAll} />}
+
+        {/* ---------- SYNTHÈSES & MAINTENANCE ---------- */}
+        {currentView === 'SITUATION' && <SituationScreen articles={articles} depots={depots} />}
+        {currentView === 'GRAPHE_INDICES' && <GraphesScreen />}
+        {currentView === 'MONTANTS_BLOCAGE' && <MontantsBlocageScreen partners={partners} onChanged={refreshAll} />}
+        {currentView === 'SAUVEGARDE' && <SauvegardeScreen />}
+        {currentView === 'ARCHIVAGE' && <ArchivageScreen />}
+        {currentView === 'AFFICHAGE_TABLES' && <TablesScreen />}
 
         {/* ---------- STOCKS ---------- */}
         {currentView === 'STOCKS' && (

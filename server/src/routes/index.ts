@@ -72,7 +72,7 @@ api.post('/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'INVALID_CREDENTIALS' });
     }
     const authUser = { id: user.id, username: user.username, role: user.role };
-    res.json({ token: signToken(authUser), user: authUser });
+    res.json({ token: signToken(authUser), user: authUser, mustChangePassword: user.mustChangePassword });
   } catch (error) {
     handleError(res, error);
   }
@@ -107,8 +107,17 @@ api.put('/partner-categories/:id', requireRole('ADMINISTRATEUR'), async (req, re
 });
 
 // ---------- Partners ----------
-api.get('/partners', async (_req, res) => {
-  res.json(await prisma.partner.findMany({ include: { category: true, zone: true }, orderBy: { raisonSociale: 'asc' } }));
+api.get('/partners', async (req, res) => {
+  const { limit, offset, q } = paging(req);
+  res.json(
+    await prisma.partner.findMany({
+      where: q ? { OR: [{ code: { contains: q, mode: 'insensitive' } }, { raisonSociale: { contains: q, mode: 'insensitive' } }] } : undefined,
+      include: { category: true, zone: true },
+      orderBy: { raisonSociale: 'asc' },
+      take: limit,
+      skip: offset
+    })
+  );
 });
 
 api.post('/partners', requireRole('ADMINISTRATEUR'), async (req, res) => {
@@ -145,11 +154,25 @@ api.get('/partners/:id/history', async (req, res) => {
 });
 
 // ---------- Articles ----------
-api.get('/articles', async (_req, res) => {
+/** Shared paging: ?limit (≤1000), ?offset, ?q. Defaults keep existing clients working. */
+function paging(req: any, defLimit = 500) {
+  const limit = Math.min(Math.max(Number(req.query.limit) || defLimit, 1), 1000);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  return { limit, offset, q };
+}
+
+api.get('/articles', async (req, res) => {
+  const { limit, offset, q } = paging(req);
   res.json(
     await prisma.article.findMany({
+      where: q
+        ? { OR: [{ code: { contains: q, mode: 'insensitive' } }, { designation: { contains: q, mode: 'insensitive' } }, { barcode: { contains: q } }] }
+        : undefined,
       include: { prices: { include: { category: true } }, stocks: { include: { depot: true } } },
-      orderBy: { designation: 'asc' }
+      orderBy: { designation: 'asc' },
+      take: limit,
+      skip: offset
     })
   );
 });
@@ -415,7 +438,8 @@ api.get('/documents', async (req, res) => {
       },
       include: { partner: true, depot: true, destDepot: true, lines: true },
       orderBy: { createdAt: 'desc' },
-      take: 100
+      take: paging(req, 300).limit,
+      skip: paging(req).offset
     })
   );
 });
@@ -650,7 +674,7 @@ api.put('/users/:id', requireRole('ADMINISTRATEUR'), async (req, res) => {
       data: {
         role: input.role,
         active: input.active,
-        ...(input.password ? { passwordHash: await bcrypt.hash(input.password, 10) } : {})
+        ...(input.password ? { passwordHash: await bcrypt.hash(input.password, 10), mustChangePassword: true } : {})
       },
       select: { id: true, username: true, role: true, active: true, updatedAt: true }
     });
@@ -698,4 +722,103 @@ api.get('/reports/fiscal', async (req, res) => {
   } catch (error) {
     handleError(res, error);
   }
+});
+
+// ---------- Self-service password change (forced rotation lands here) ----------
+api.post('/auth/change-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || newPassword.length < 6) {
+      return res.status(400).json({ message: 'PASSWORD_TOO_SHORT' });
+    }
+    if (newPassword === currentPassword) return res.status(400).json({ message: 'PASSWORD_UNCHANGED' });
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      return res.status(401).json({ message: 'INVALID_CREDENTIALS' });
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePassword: false }
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Backup & archive export (admin) ----------
+/**
+ * Logical JSON export of the whole database (or one year's operational data when
+ * ?year= is given — the Archivage screen). This is a data escape hatch and an
+ * off-machine backup the manager can download from any client station; the
+ * README additionally documents pg_dump for full binary backups.
+ */
+api.get('/backup/export', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    const year = Number(req.query.year) || null;
+    const range = year ? { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } : undefined;
+
+    const [users, depots, categories, zones, livreurs, chargeClasses, typeReglements, partners, articles, prices, stocks, documents, lines, charges, cash, comments, settings] =
+      await Promise.all([
+        prisma.user.findMany({ select: { id: true, username: true, role: true, active: true, createdAt: true } }),
+        prisma.depot.findMany(),
+        prisma.partnerCategory.findMany(),
+        prisma.zone.findMany(),
+        prisma.livreur.findMany(),
+        prisma.chargeClass.findMany(),
+        prisma.typeReglement.findMany(),
+        prisma.partner.findMany(),
+        prisma.article.findMany(),
+        prisma.articlePrice.findMany(),
+        prisma.articleStock.findMany(),
+        prisma.document.findMany({ where: range ? { createdAt: range } : undefined }),
+        prisma.documentLine.findMany({ where: range ? { document: { createdAt: range } } : undefined }),
+        prisma.charge.findMany({ where: range ? { date: range } : undefined }),
+        prisma.cashTransaction.findMany({ where: range ? { createdAt: range } : undefined }),
+        prisma.comment.findMany(),
+        prisma.appSetting.findMany()
+      ]);
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="anagnorisis-${year ? 'archive-' + year : 'backup'}-${stamp}.json"`);
+    res.json({
+      exportedAt: new Date().toISOString(),
+      scope: year ? { year } : 'full',
+      counts: { partners: partners.length, articles: articles.length, documents: documents.length, cash: cash.length },
+      data: { users, depots, categories, zones, livreurs, chargeClasses, typeReglements, partners, articles, prices, stocks, documents, lines, charges, cash, comments, settings }
+    });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Raw table browser (admin, read-only, allowlisted) ----------
+const BROWSABLE_TABLES = {
+  User: () => prisma.user.findMany({ take: 200, select: { id: true, username: true, role: true, active: true, mustChangePassword: true, createdAt: true } }),
+  Depot: () => prisma.depot.findMany({ take: 200 }),
+  PartnerCategory: () => prisma.partnerCategory.findMany({ take: 200 }),
+  Zone: () => prisma.zone.findMany({ take: 200 }),
+  Livreur: () => prisma.livreur.findMany({ take: 200 }),
+  ChargeClass: () => prisma.chargeClass.findMany({ take: 200 }),
+  TypeReglement: () => prisma.typeReglement.findMany({ take: 200 }),
+  Partner: () => prisma.partner.findMany({ take: 200 }),
+  Article: () => prisma.article.findMany({ take: 200 }),
+  ArticlePrice: () => prisma.articlePrice.findMany({ take: 200 }),
+  ArticleStock: () => prisma.articleStock.findMany({ take: 200 }),
+  Document: () => prisma.document.findMany({ take: 200, orderBy: { createdAt: 'desc' } }),
+  DocumentLine: () => prisma.documentLine.findMany({ take: 200 }),
+  Charge: () => prisma.charge.findMany({ take: 200 }),
+  CashTransaction: () => prisma.cashTransaction.findMany({ take: 200, orderBy: { createdAt: 'desc' } }),
+  Comment: () => prisma.comment.findMany({ take: 200 }),
+  AppSetting: () => prisma.appSetting.findMany({ take: 200 })
+} as const;
+
+api.get('/admin/tables', requireRole('ADMINISTRATEUR'), (_req, res) => {
+  res.json(Object.keys(BROWSABLE_TABLES));
+});
+
+api.get('/admin/tables/:name', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  const loader = BROWSABLE_TABLES[req.params.name as keyof typeof BROWSABLE_TABLES];
+  if (!loader) return res.status(404).json({ message: 'TABLE_NOT_FOUND' });
+  res.json(await loader());
 });
