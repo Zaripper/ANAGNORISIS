@@ -171,7 +171,7 @@ api.get('/articles', async (req, res) => {
       where: q
         ? { OR: [{ code: { contains: q, mode: 'insensitive' } }, { designation: { contains: q, mode: 'insensitive' } }, { barcode: { contains: q } }] }
         : undefined,
-      include: { prices: { include: { category: true } }, stocks: { include: { depot: true } } },
+      include: { prices: { include: { category: true } }, stocks: { include: { depot: true } }, mainSupplier: true },
       orderBy: { designation: 'asc' },
       take: limit,
       skip: offset
@@ -206,6 +206,11 @@ api.post('/articles', requireRole('ADMINISTRATEUR'), async (req, res) => {
         pump: input.pump,
         tvaRate: input.tvaRate,
         seuilReappro: input.seuilReappro ?? null,
+        quantiteReappro: input.quantiteReappro ?? null,
+        securite: input.securite ?? null,
+        colisage: input.colisage ?? 0,
+        tauxRefaction: input.tauxRefaction ?? 0,
+        mainSupplierId: input.mainSupplierId ?? null,
         preferred: input.preferred ?? false,
         maxQtyPerClient: input.maxQtyPerClient ?? null,
         prices: { create: input.prices }
@@ -228,8 +233,15 @@ api.put('/articles/:id', requireRole('ADMINISTRATEUR'), async (req, res) => {
         for (const price of prices) {
           await tx.articlePrice.upsert({
             where: { articleId_categoryId: { articleId: updated.id, categoryId: price.categoryId } },
-            update: { priceHT: price.priceHT, priceTTC: price.priceTTC },
-            create: { articleId: updated.id, categoryId: price.categoryId, priceHT: price.priceHT, priceTTC: price.priceTTC }
+            update: { priceHT: price.priceHT, priceTTC: price.priceTTC, policy: price.policy, taux: price.taux },
+            create: {
+              articleId: updated.id,
+              categoryId: price.categoryId,
+              priceHT: price.priceHT,
+              priceTTC: price.priceTTC,
+              policy: price.policy,
+              taux: price.taux
+            }
           });
         }
       }

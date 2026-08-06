@@ -26,13 +26,11 @@ export type ScreenId =
   | 'PARTENAIRES'
   | 'ARTICLES'
   | 'DEPOTS'
-  | 'COMMENTAIRES'
   | 'TYPE_REGULES'
   | 'LIVREURS'
   | 'ZONES'
   // Mouvement — opérations
   | 'CHARGES'
-  | 'COMMANDES'
   | 'ACHATS'
   | 'ACHATS_VALIDATION'
   | 'AVOIRS_ACHATS'
@@ -138,14 +136,12 @@ export const SCREENS: ScreenDef[] = [
   { id: 'PARTENAIRES', label: 'Partenaires', group: 'Fichier', keywords: 'clients fournisseurs tiers', implemented: true },
   { id: 'ARTICLES', label: 'Articles', group: 'Fichier', keywords: 'produits catalogue prix', implemented: true },
   { id: 'DEPOTS', label: 'Dépôts', group: 'Fichier', keywords: 'magasins entrepots', implemented: true },
-  { id: 'COMMENTAIRES', label: 'Commentaires', group: 'Fichier', keywords: 'notes annotations', implemented: false },
   { id: 'TYPE_REGULES', label: 'Types des régules', group: 'Fichier', keywords: 'motifs regularisation casse perte', implemented: true },
   { id: 'LIVREURS', label: 'Livreurs', group: 'Fichier', keywords: 'agents chauffeurs', implemented: true },
   { id: 'ZONES', label: 'Zones', group: 'Fichier', keywords: 'secteurs geographique', implemented: true },
 
   // ---------- Mouvement ----------
   { id: 'CHARGES', label: 'Charges', group: 'Mouvement', keywords: 'depenses frais loyer', implemented: true },
-  { id: 'COMMANDES', label: 'Commandes', group: 'Mouvement', keywords: 'commande fournisseur reception', implemented: true },
   { id: 'ACHATS', label: 'Achats', group: 'Mouvement', keywords: 'saisie achat fournisseur', implemented: true },
   { id: 'ACHATS_VALIDATION', label: 'Saisie et validation des achats', group: 'Mouvement', keywords: 'achat valide immediat', implemented: false },
   { id: 'AVOIRS_ACHATS', label: 'Avoirs achats', group: 'Mouvement', keywords: 'retour fournisseur', implemented: true },

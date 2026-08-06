@@ -18,12 +18,14 @@ export const documentTypes = [
 export const documentStatuses = ['OUVERT', 'VALIDE', 'ANNULE'] as const;
 export const paymentModes = ['ESPECE', 'CHEQUE', 'TRAITE', 'VIREMENT'] as const;
 export const cashTxTypes = ['RECETTE', 'DEPENSE'] as const;
+export const pricePolicies = ['PRIX_SAISI', 'TAUX'] as const;
 
 export type UserRole = (typeof userRoles)[number];
 export type DocumentType = (typeof documentTypes)[number];
 export type DocumentStatus = (typeof documentStatuses)[number];
 export type PaymentMode = (typeof paymentModes)[number];
 export type CashTxType = (typeof cashTxTypes)[number];
+export type PricePolicy = (typeof pricePolicies)[number];
 
 // ---------- Stock direction ----------
 // Types that add quantity to stock at validation (draft creation never touches physical stock)
@@ -220,6 +222,11 @@ export const createArticleSchema = z.object({
   pump: z.number().nonnegative().default(0),
   tvaRate: z.number().nonnegative().default(19),
   seuilReappro: z.number().int().nonnegative().optional().nullable(),
+  quantiteReappro: z.number().int().nonnegative().optional().nullable(),
+  securite: z.number().int().nonnegative().optional().nullable(),
+  colisage: z.number().int().nonnegative().default(0),
+  tauxRefaction: z.number().min(0).max(100).default(0),
+  mainSupplierId: z.string().uuid().optional().nullable(),
   // Mise en avant a la caisse.
   preferred: z.boolean().optional(),
   // Contingentement des produits rares: max par client et par document.
@@ -229,11 +236,31 @@ export const createArticleSchema = z.object({
       z.object({
         categoryId: z.string().uuid(),
         priceHT: z.number().nonnegative(),
-        priceTTC: z.number().nonnegative()
+        priceTTC: z.number().nonnegative(),
+        policy: z.enum(pricePolicies).default('PRIX_SAISI'),
+        taux: z.number().min(0).default(0)
       })
     )
     .default([])
 });
+
+/**
+ * Prix de vente HT effectif d'un article pour une categorie.
+ *
+ * PRIX_SAISI: le prix saisi fait foi.
+ * TAUX: le prix est derive du P.U.M.P — la marge reste constante quand le cout
+ * d'achat evolue, ce qui evite de reprendre tous les tarifs a chaque achat.
+ */
+export function effectivePriceHT(
+  price: { policy?: PricePolicy | null; taux?: number | null; priceHT: number },
+  pump: number
+): number {
+  if (price.policy === 'TAUX') {
+    const taux = price.taux ?? 0;
+    return Math.round(pump * (1 + taux / 100) * 100) / 100;
+  }
+  return price.priceHT;
+}
 export type CreateArticleInput = z.infer<typeof createArticleSchema>;
 
 export const updateArticleSchema = createArticleSchema.partial().extend({

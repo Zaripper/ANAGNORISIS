@@ -15,7 +15,6 @@ import {
 import type { RefField } from '../screens/ReferenceData';
 import { Badge, Button, Card, Field, Input, Modal, Screen, Select, ToastHost, useToasts } from '../components/ui';
 import { POSScreen } from '../screens/POS';
-import { CommandesScreen } from '../screens/Commandes';
 import { ChargesScreen } from '../screens/Charges';
 import { DocumentListScreen, MouvementArticleScreen, ReapproScreen, ValidationQueueScreen } from '../screens/Consultation';
 import { SettingsScreen, UsersScreen } from '../screens/Admin';
@@ -25,6 +24,7 @@ import { Etat104Screen } from '../screens/Etat104';
 import { GraphesScreen, MontantsBlocageScreen, SituationScreen } from '../screens/Insights';
 import { ArchivageScreen, SauvegardeScreen, TablesScreen } from '../screens/Maintenance';
 import { AccueilScreen } from '../screens/Accueil';
+import { ArticlesFichierScreen } from '../screens/ArticlesFichier';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -88,12 +88,18 @@ export interface Article {
   priceHT: number; // display price for the currently selected partner's category tier
   tvaRate: number;
   seuilReappro?: number | null;
+  quantiteReappro?: number | null;
+  securite?: number | null;
+  colisage?: number;
+  tauxRefaction?: number;
+  mainSupplierId?: string | null;
+  mainSupplierName?: string | null;
   /** Mis en avant a la caisse (onglet Preferes). */
   preferred?: boolean;
   /** Quantite maximale par client et par document (produits rares). */
   maxQtyPerClient?: number | null;
   stockGlobal: number; // summed available stock (in stock - reserved) across all depots
-  pricesByCategory: Record<string, { priceHT: number; priceTTC: number }>;
+  pricesByCategory: Record<string, { priceHT: number; priceTTC: number; policy?: string; taux?: number }>;
   stocksByDepot: Record<string, { qtyInStock: number; qtyReserved: number }>;
 }
 
@@ -2736,9 +2742,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   // Derived article list, priced for the currently selected partner's category
   const articles: Article[] = useMemo(() => {
     return rawArticles.map((a) => {
-      const pricesByCategory: Record<string, { priceHT: number; priceTTC: number }> = {};
+      const pricesByCategory: Record<string, { priceHT: number; priceTTC: number; policy?: string; taux?: number }> = {};
       for (const p of a.prices ?? []) {
-        pricesByCategory[p.categoryId] = { priceHT: num(p.priceHT), priceTTC: num(p.priceTTC) };
+        pricesByCategory[p.categoryId] = { priceHT: num(p.priceHT), priceTTC: num(p.priceTTC), policy: p.policy, taux: num(p.taux) };
       }
       const stocksByDepot: Record<string, { qtyInStock: number; qtyReserved: number }> = {};
       let totalAvailable = 0;
@@ -2755,6 +2761,12 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         pump: num(a.pump),
         tvaRate: num(a.tvaRate),
         seuilReappro: a.seuilReappro ?? null,
+        quantiteReappro: a.quantiteReappro ?? null,
+        securite: a.securite ?? null,
+        colisage: a.colisage ?? 0,
+        tauxRefaction: num(a.tauxRefaction),
+        mainSupplierId: a.mainSupplierId ?? null,
+        mainSupplierName: a.mainSupplier?.raisonSociale ?? null,
         preferred: Boolean(a.preferred),
         maxQtyPerClient: a.maxQtyPerClient ?? null,
         priceHT: tierPrice ?? num(a.pump),
@@ -3172,8 +3184,16 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {/* ---------- ARTICLES / PRIX ---------- */}
         {currentView === 'ARTICLES' && (
-          <PrixArticlesView articles={articles} categories={categories} depots={depots} />
+          <ArticlesFichierScreen
+            articles={articles}
+            categories={categories}
+            partners={partners}
+            depots={depots}
+            onSaved={refreshAll}
+          />
         )}
+
+        {currentView === 'PRIX_ARTICLES' && <PrixArticlesView articles={articles} categories={categories} depots={depots} />}
 
         {currentView === 'ACCUEIL' && <AccueilScreen username={currentUser?.username} onNavigate={setCurrentView} />}
 
@@ -3191,10 +3211,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           />
         )}
 
-        {/* ---------- COMMANDES / CHARGES ---------- */}
-        {currentView === 'COMMANDES' && (
-          <CommandesScreen articles={articles} partners={partners} depots={depots} documents={documents} onSaved={refreshAll} />
-        )}
+        {/* ---------- CHARGES ---------- */}
         {currentView === 'CHARGES' && <ChargesScreen chargeClasses={chargeClasses} />}
 
         {/* ---------- CONSULTATION ---------- */}

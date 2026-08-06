@@ -50,6 +50,14 @@ enum CashTxType {
   DEPENSE
 }
 
+/// Politique de prix d'un article pour une categorie de partenaire.
+/// PRIX_SAISI: le prix de vente est saisi tel quel.
+/// TAUX: le prix est derive du P.U.M.P par application d'un taux de marge.
+enum PricePolicy {
+  PRIX_SAISI
+  TAUX
+}
+
 model User {
   id           String   @id @default(uuid())
   username     String   @unique
@@ -172,6 +180,7 @@ model Partner {
   updatedAt        DateTime          @updatedAt
   documents        Document[]
   cashTransactions CashTransaction[]
+  suppliedArticles Article[]         @relation("ArticleMainSupplier")
 
   @@index([categoryId])
   @@index([zoneId])
@@ -185,7 +194,19 @@ model Article {
   category    String?
   pump        Decimal        @default(0.0)
   tvaRate     Decimal        @default(19.0)
+  /// Nombre d'unites par colis (0 = vendu uniquement a l'unite).
+  colisage    Int            @default(0)
+  /// Taux de refaction applicable a l'article, en pourcentage.
+  tauxRefaction Decimal      @default(0.0)
+  /// Stock de securite: quantite en dessous de laquelle il ne faut pas descendre.
+  securite    Int?
+  /// Seuil d'alerte: declenche l'apparition dans "Articles a reapprovisionner".
   seuilReappro Int?
+  /// Quantite a commander lorsque le seuil d'alerte est atteint.
+  quantiteReappro Int?
+  /// Fournisseur habituel de l'article.
+  mainSupplierId String?
+  mainSupplier   Partner?    @relation("ArticleMainSupplier", fields: [mainSupplierId], references: [id])
   active      Boolean        @default(true)
   /// Article mis en avant a la caisse (onglet Preferes).
   preferred   Boolean        @default(false)
@@ -200,6 +221,7 @@ model Article {
 
   @@index([barcode])
   @@index([designation])
+  @@index([mainSupplierId])
 }
 
 model ArticlePrice {
@@ -210,6 +232,10 @@ model ArticlePrice {
   category   PartnerCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   priceHT    Decimal         @default(0.0)
   priceTTC   Decimal         @default(0.0)
+  /// PRIX_SAISI: priceHT fait foi. TAUX: priceHT est recalcule depuis le P.U.M.P
+  /// et `taux`, pour que la marge reste constante quand le cout d'achat bouge.
+  policy     PricePolicy     @default(PRIX_SAISI)
+  taux       Decimal         @default(0.0)
   updatedAt  DateTime        @updatedAt
 
   @@unique([articleId, categoryId])
