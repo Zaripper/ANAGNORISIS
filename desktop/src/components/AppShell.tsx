@@ -188,7 +188,13 @@ function Rail({
       {modules.map((g) => {
         const Icon = MODULE_META[g].icon;
         return (
-          <RailButton key={g} label={g} title={MODULE_META[g].hint} active={activeModule === g && !isHome} onClick={() => onModule(g)}>
+          <RailButton
+            key={g}
+            label={MODULE_META[g].label ?? g}
+            title={MODULE_META[g].hint}
+            active={activeModule === g && !isHome}
+            onClick={() => onModule(g)}
+          >
             <Icon className="w-[18px] h-[18px]" />
           </RailButton>
         );
@@ -257,11 +263,17 @@ function ModulePanel({
             <button
               key={s.id}
               onClick={() => onSelect(s.id)}
-              className={`text-left px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
-                isActive ? 'bg-[#0F5B38] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              title={s.implemented ? s.label : `${s.label} — pas encore disponible`}
+              className={`text-left px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-2 ${
+                isActive
+                  ? 'bg-[#0F5B38] text-white shadow-sm'
+                  : s.implemented
+                    ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    : 'text-slate-300 hover:bg-slate-50'
               }`}
             >
-              {s.label}
+              <span className="truncate">{s.label}</span>
+              {!s.implemented && <span className={`text-[9px] shrink-0 ${isActive ? 'text-white/70' : 'text-slate-300'}`}>•</span>}
             </button>
           );
         })}
@@ -290,7 +302,7 @@ export function AppShell({
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   // The module whose panel is shown. Follows the current screen but can be
   // switched independently (browsing another module before picking a screen).
-  const [activeModule, setActiveModule] = useState<ScreenGroup>('Ventes');
+  const [activeModule, setActiveModule] = useState<ScreenGroup>('Fichier');
 
   const screen = current ? getScreen(current) : undefined;
   const isHome = current === HOME_SCREEN;
@@ -370,12 +382,31 @@ export function AppShell({
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {/* Keyed on the screen id so every navigation re-runs the entrance animation. */}
           <div key={current ?? 'home'} className="flex-1 min-h-0 flex flex-col p-5 anim-view">
-            {children}
+            {screen && !screen.implemented ? <NotBuiltYet screen={screen} /> : children}
           </div>
         </main>
       </div>
 
       {paletteOpen && <CommandPalette role={user?.role} onSelect={onNavigate} onClose={() => setPaletteOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Ecran d'un module present dans le menu mais pas encore construit. Il nomme le
+ * module et le dit franchement, plutot que d'afficher une page vide qui
+ * ressemble a une panne.
+ */
+function NotBuiltYet({ screen }: { screen: ScreenDef }) {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="bg-white border border-slate-200 rounded-2xl px-10 py-8 shadow-xs text-center max-w-md">
+        <div className="font-extrabold text-slate-900 text-sm mb-1">{screen.label}</div>
+        <div className="text-slate-400 text-xs mb-3">{screen.group}</div>
+        <p className="text-slate-500 text-xs leading-relaxed">
+          Ce module figure au menu pour refleter le perimetre complet du logiciel, mais il n&apos;est pas encore developpe.
+        </p>
+      </div>
     </div>
   );
 }

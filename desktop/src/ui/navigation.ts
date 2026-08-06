@@ -1,145 +1,112 @@
 import type { UserRole } from '@anagnorisis/shared';
-import {
-  BarChart3,
-  ScanBarcode,
-  Boxes,
-  Landmark,
-  LayoutDashboard,
-  Library,
-  Settings,
-  ShoppingCart,
-  Truck,
-  Users,
-  Wallet,
-  type LucideIcon
-} from 'lucide-react';
+import { FolderOpen, HelpCircle, LayoutDashboard, ScanBarcode, Search, Settings, Wrench, type LucideIcon } from 'lucide-react';
 
 /**
- * THE screen registry — single source of truth for application navigation.
+ * THE screen registry — source unique de la navigation.
  *
- * Screens are organised into business MODULES (Ventes, Achats, Stock, …), each
- * with at most ~9 screens. The shell renders an icon rail of modules plus a
- * contextual panel listing only the active module's screens — replacing the
- * earlier single flat sidebar of 60 entries, which was unusable at scale.
+ * La structure reprend exactement celle du logiciel actuel (M&M Informatique):
+ * cinq menus — Fichier, Mouvement, Consultation, Outils, ? — auxquels s'ajoutent
+ * l'Accueil et la Caisse. Les libellés et l'ordre des entrées sont ceux du
+ * logiciel d'origine, pour que l'équipe retrouve ses repères.
  *
- * Every entry here is implemented; a screen cannot appear in navigation without
- * a matching view, and vice versa.
+ * Philosophie conservée: tout ce qui ne doit pas être modifiable depuis
+ * n'importe où — articles, partenaires, dépôts, zones… — se crée UNIQUEMENT
+ * depuis le menu Fichier. Les écrans de Mouvement consomment ces données sans
+ * jamais permettre d'en créer.
  */
 
 export type ScreenId =
   // Accueil
   | 'ACCUEIL'
-  // Caisse (module autonome)
+  // Caisse
   | 'CAISSE_POS'
-  // Ventes
+  // Fichier — données de base (seul endroit où l'on crée du référentiel)
+  | 'CHARGE_CLASSES'
+  | 'PARTNER_CATEGORIES'
+  | 'PARTENAIRES'
+  | 'ARTICLES'
+  | 'DEPOTS'
+  | 'COMMENTAIRES'
+  | 'TYPE_REGULES'
+  | 'LIVREURS'
+  | 'ZONES'
+  // Mouvement — opérations
+  | 'CHARGES'
+  | 'COMMANDES'
+  | 'ACHATS'
+  | 'ACHATS_VALIDATION'
+  | 'AVOIRS_ACHATS'
   | 'BONS_PREP'
+  | 'VALIDATION_BON_PREP'
+  | 'PROFORMA'
+  | 'FACTURE'
   | 'BONS_LIVRAISON'
   | 'VENTES_VALIDATION'
-  | 'VALIDATION_BON_PREP'
-  | 'FACTURE'
-  | 'PROFORMA'
   | 'AVOIRS_VENTES'
-  | 'LISTE_BONS_PREP'
-  // Achats
-  | 'ACHATS'
-  | 'COMMANDES'
-  | 'AVOIRS_ACHATS'
-  | 'ACHATS_CONSULT'
-  // Stock
-  | 'STOCKS'
-  | 'ETATS_ARTICLES'
-  | 'MOUVEMENT_ARTICLE'
-  | 'REAPPRO'
-  | 'TRANSFERTS'
   | 'REGULES_PLUS'
   | 'REGULES_MOINS'
-  | 'INVENTAIRES'
-  | 'SITUATION'
-  // Trésorerie
-  | 'JOURNAL_CAISSE'
-  | 'JOURNAL_BANQUE'
+  | 'TRANSFERTS'
   | 'CHEQUES_RECETTE'
   | 'CHEQUES_DEPENSE'
   | 'VIREMENT'
+  | 'SAISIE_CAISSE'
   | 'TRANSACTIONS_CAISSIERES'
-  | 'CHARGES'
-  // Partenaires
-  | 'PARTENAIRES'
-  | 'SUIVI_PARTENAIRE'
-  | 'CREANCES_DETTES'
-  | 'CREANCES_A_RECOUVRER'
-  | 'PARTENAIRES_BLOQUES'
-  | 'MONTANTS_BLOCAGE'
-  | 'PARTNER_CATEGORIES'
-  | 'ZONES'
-  // Référentiel
-  | 'ARTICLES'
-  | 'DEPOTS'
-  | 'LIVREURS'
-  | 'TYPE_REGLEMENTS'
-  | 'CHARGE_CLASSES'
-  // Analyse
-  | 'TABLEAU_BORD'
-  | 'CHIFFRE_AFFAIRES'
-  | 'CHIFFRE_AFFAIRES_AGENT'
-  | 'VENTES_ARTICLES'
-  | 'GRAPHE_INDICES'
-  | 'ARCHIVE'
-  // Fiscal
+  // Consultation — états et analyses
   | 'ETAT_104'
   | 'DECLARATION_TVA'
   | 'ETAT_G50'
-  | 'ETAT_104_LISTE'
-  // Réglages
+  | 'STOCKS'
+  | 'PRIX_ARTICLES'
+  | 'MOUVEMENT_ARTICLE'
+  | 'SITUATION'
+  | 'REAPPRO'
+  | 'ETATS_ARTICLES'
+  | 'JOURNAL_CAISSE'
+  | 'JOURNAL_BANQUE'
+  | 'CREANCES_DETTES'
+  | 'CREANCES_A_RECOUVRER'
+  | 'SUIVI_PARTENAIRE'
+  | 'PARTENAIRES_BLOQUES'
+  | 'LISTE_BONS_PREP'
+  | 'CHIFFRE_AFFAIRES_AGENT'
+  | 'CHIFFRE_AFFAIRES'
+  | 'VENTES_ARTICLES'
+  | 'ARCHIVE'
+  | 'TABLEAU_BORD'
+  | 'GRAPHE_INDICES'
+  // Outils
   | 'PARAMETRES'
-  | 'UTILISATEURS'
   | 'SAUVEGARDE'
-  | 'ARCHIVAGE'
+  | 'RESTAURATION'
+  | 'MODIFICATION'
   | 'AFFICHAGE_TABLES'
+  | 'UTILISATEURS'
+  | 'INVENTAIRES'
+  | 'ARCHIVAGE'
+  | 'MONTANTS_BLOCAGE'
+  | 'REORGANISATION_STOCKS'
+  | 'IMPRIMANTE'
+  // ?
   | 'A_PROPOS';
 
-export type ScreenGroup =
-  | 'Accueil'
-  | 'Caisse'
-  | 'Ventes'
-  | 'Achats'
-  | 'Stock'
-  | 'Trésorerie'
-  | 'Partenaires'
-  | 'Référentiel'
-  | 'Analyse'
-  | 'Fiscal'
-  | 'Réglages';
+export type ScreenGroup = 'Accueil' | 'Caisse' | 'Fichier' | 'Mouvement' | 'Consultation' | 'Outils' | 'Aide';
 
-export const SCREEN_GROUPS: ScreenGroup[] = [
-  'Caisse',
-  'Ventes',
-  'Achats',
-  'Stock',
-  'Trésorerie',
-  'Partenaires',
-  'Référentiel',
-  'Analyse',
-  'Fiscal',
-  'Réglages'
-];
+/**
+ * Ordre du rail, repris du logiciel actuel. 'Accueil' n'y figure pas: il a son
+ * propre bouton en tête de rail.
+ */
+export const SCREEN_GROUPS: ScreenGroup[] = ['Fichier', 'Mouvement', 'Consultation', 'Outils', 'Aide', 'Caisse'];
 
-/** Icon + hint for each module's rail button. */
-export const MODULE_META: Record<ScreenGroup, { icon: LucideIcon; hint: string }> = {
+export const MODULE_META: Record<ScreenGroup, { icon: LucideIcon; hint: string; label?: string }> = {
   Accueil: { icon: LayoutDashboard, hint: "Écran d'accueil" },
   Caisse: { icon: ScanBarcode, hint: 'Vente au comptoir — scan, encaissement, ticket' },
-  Ventes: { icon: ShoppingCart, hint: 'Caisse, bons, factures, avoirs clients' },
-  Achats: { icon: Truck, hint: 'Achats, commandes fournisseurs, avoirs' },
-  Stock: { icon: Boxes, hint: 'Stocks, mouvements, transferts, inventaires' },
-  Trésorerie: { icon: Wallet, hint: 'Caisse, banque, chèques, charges' },
-  Partenaires: { icon: Users, hint: 'Clients, fournisseurs, créances' },
-  Référentiel: { icon: Library, hint: 'Articles, dépôts, livreurs, données de base' },
-  Analyse: { icon: BarChart3, hint: 'Tableau de bord, CA, graphes' },
-  Fiscal: { icon: Landmark, hint: 'TVA, timbre, TAP, G50 (documents de travail)' },
-  Réglages: { icon: Settings, hint: 'Société, utilisateurs, sauvegardes' }
+  Fichier: { icon: FolderOpen, hint: 'Données de base: articles, partenaires, dépôts…' },
+  Mouvement: { icon: Wrench, hint: 'Achats, ventes, stocks, trésorerie' },
+  Consultation: { icon: Search, hint: 'États, journaux, analyses, fiscal' },
+  Outils: { icon: Settings, hint: 'Paramètres, utilisateurs, maintenance' },
+  Aide: { icon: HelpCircle, hint: 'À propos', label: '?' }
 };
 
-/** Neutral landing screen: opening the app must not start any workflow. */
 export const HOME_SCREEN: ScreenId = 'ACCUEIL';
 export const HOME_ICON: LucideIcon = LayoutDashboard;
 
@@ -147,93 +114,96 @@ export interface ScreenDef {
   id: ScreenId;
   label: string;
   group: ScreenGroup;
-  /** Extra words matched by the command palette (synonyms, old menu names). */
+  /** Synonymes recherchés par la palette (Ctrl+K). */
   keywords?: string;
-  /** When set, only these roles see the entry (server enforces writes regardless). */
+  /**
+   * false tant que l'écran n'est pas construit. L'entrée reste visible — le menu
+   * doit refléter le périmètre complet du logiciel actuel — mais elle est
+   * estompée et ouvre un écran qui le dit clairement.
+   */
+  implemented: boolean;
   roles?: UserRole[];
 }
 
 export const SCREENS: ScreenDef[] = [
   // ---------- Accueil ----------
-  { id: 'ACCUEIL', label: 'Accueil', group: 'Accueil', keywords: 'bienvenue demarrage home page accueil' },
+  { id: 'ACCUEIL', label: 'Accueil', group: 'Accueil', keywords: 'bienvenue demarrage home', implemented: true },
 
-  // ---------- Caisse (module autonome) ----------
-  { id: 'CAISSE_POS', label: 'Vente au comptoir', group: 'Caisse', keywords: 'pos caisse scanner code barres ticket detail retail comptoir' },
+  // ---------- Caisse ----------
+  { id: 'CAISSE_POS', label: 'Vente au comptoir', group: 'Caisse', keywords: 'pos caisse scan code barres ticket detail', implemented: true },
 
-  // ---------- Ventes ----------
-  { id: 'BONS_PREP', label: 'Bons de commande', group: 'Ventes', keywords: 'commande client bc preparation reservation' },
-  { id: 'VALIDATION_BON_PREP', label: 'Validation des commandes', group: 'Ventes', keywords: 'valider bons attente queue' },
-  { id: 'BONS_LIVRAISON', label: 'Bons de livraison', group: 'Ventes', keywords: 'bl livraison expedition facturer' },
-  { id: 'VENTES_VALIDATION', label: 'Ventes', group: 'Ventes', keywords: 'facturation sortie gros' },
-  { id: 'FACTURE', label: 'Factures', group: 'Ventes', keywords: 'facturation client' },
-  { id: 'PROFORMA', label: 'Proformas', group: 'Ventes', keywords: 'devis estimation quote' },
-  { id: 'AVOIRS_VENTES', label: 'Avoirs clients', group: 'Ventes', keywords: 'retour client remboursement' },
-  { id: 'LISTE_BONS_PREP', label: 'Liste des commandes', group: 'Ventes', keywords: 'bc historique journal' },
+  // ---------- Fichier (ordre du logiciel actuel) ----------
+  { id: 'CHARGE_CLASSES', label: 'Classes de charges', group: 'Fichier', keywords: 'nature depenses', implemented: true },
+  { id: 'PARTNER_CATEGORIES', label: 'Catégories de partenaires', group: 'Fichier', keywords: 'tarifs paliers categorie', implemented: true },
+  { id: 'PARTENAIRES', label: 'Partenaires', group: 'Fichier', keywords: 'clients fournisseurs tiers', implemented: true },
+  { id: 'ARTICLES', label: 'Articles', group: 'Fichier', keywords: 'produits catalogue prix', implemented: true },
+  { id: 'DEPOTS', label: 'Dépôts', group: 'Fichier', keywords: 'magasins entrepots', implemented: true },
+  { id: 'COMMENTAIRES', label: 'Commentaires', group: 'Fichier', keywords: 'notes annotations', implemented: false },
+  { id: 'TYPE_REGULES', label: 'Types des régules', group: 'Fichier', keywords: 'motifs regularisation casse perte', implemented: true },
+  { id: 'LIVREURS', label: 'Livreurs', group: 'Fichier', keywords: 'agents chauffeurs', implemented: true },
+  { id: 'ZONES', label: 'Zones', group: 'Fichier', keywords: 'secteurs geographique', implemented: true },
 
-  // ---------- Achats ----------
-  { id: 'ACHATS', label: 'Saisie des achats', group: 'Achats', keywords: 'approvisionnement fournisseur entree' },
-  { id: 'COMMANDES', label: 'Commandes fournisseurs', group: 'Achats', keywords: 'bon commande reception' },
-  { id: 'AVOIRS_ACHATS', label: 'Avoirs fournisseurs', group: 'Achats', keywords: 'retour fournisseur' },
-  { id: 'ACHATS_CONSULT', label: 'Historique des achats', group: 'Achats', keywords: 'consultation liste achats' },
+  // ---------- Mouvement ----------
+  { id: 'CHARGES', label: 'Charges', group: 'Mouvement', keywords: 'depenses frais loyer', implemented: true },
+  { id: 'COMMANDES', label: 'Commandes', group: 'Mouvement', keywords: 'commande fournisseur reception', implemented: true },
+  { id: 'ACHATS', label: 'Achats', group: 'Mouvement', keywords: 'saisie achat fournisseur', implemented: true },
+  { id: 'ACHATS_VALIDATION', label: 'Saisie et validation des achats', group: 'Mouvement', keywords: 'achat valide immediat', implemented: false },
+  { id: 'AVOIRS_ACHATS', label: 'Avoirs achats', group: 'Mouvement', keywords: 'retour fournisseur', implemented: true },
+  { id: 'BONS_PREP', label: 'Bons de préparation', group: 'Mouvement', keywords: 'commande client reservation bp', implemented: true },
+  { id: 'VALIDATION_BON_PREP', label: 'Validation bon de préparation', group: 'Mouvement', keywords: 'valider file attente', implemented: true },
+  { id: 'PROFORMA', label: 'Proforma', group: 'Mouvement', keywords: 'devis estimation', implemented: true },
+  { id: 'FACTURE', label: 'Facture', group: 'Mouvement', keywords: 'facturation client', implemented: true },
+  { id: 'BONS_LIVRAISON', label: 'Bons de livraison', group: 'Mouvement', keywords: 'bl livraison expedition', implemented: true },
+  { id: 'VENTES_VALIDATION', label: 'Ventes', group: 'Mouvement', keywords: 'vente gros sortie', implemented: true },
+  { id: 'AVOIRS_VENTES', label: 'Avoirs ventes', group: 'Mouvement', keywords: 'retour client', implemented: true },
+  { id: 'REGULES_PLUS', label: 'Régules plus', group: 'Mouvement', keywords: 'correction entree ajustement', implemented: true },
+  { id: 'REGULES_MOINS', label: 'Régules moins', group: 'Mouvement', keywords: 'correction sortie casse', implemented: true },
+  { id: 'TRANSFERTS', label: 'Transferts inter-dépôts', group: 'Mouvement', keywords: 'mouvement depot', implemented: true },
+  { id: 'CHEQUES_RECETTE', label: 'Chèques recette', group: 'Mouvement', keywords: 'encaissement cheque recu', implemented: true },
+  { id: 'CHEQUES_DEPENSE', label: 'Chèques dépense', group: 'Mouvement', keywords: 'decaissement cheque emis', implemented: true },
+  { id: 'VIREMENT', label: 'Virement ou versement', group: 'Mouvement', keywords: 'banque transfert', implemented: true },
+  { id: 'SAISIE_CAISSE', label: 'Saisie de la caisse et validation', group: 'Mouvement', keywords: 'encaissement decaissement especes recu', implemented: false },
+  { id: 'TRANSACTIONS_CAISSIERES', label: 'Transactions caissières', group: 'Mouvement', keywords: 'toutes operations', implemented: true },
 
-  // ---------- Stock ----------
-  { id: 'STOCKS', label: 'Stocks par dépôt', group: 'Stock', keywords: 'quantites disponible' },
-  { id: 'ETATS_ARTICLES', label: 'États des articles', group: 'Stock', keywords: 'inventaire valorisation pump' },
-  { id: 'MOUVEMENT_ARTICLE', label: "Mouvement d'un article", group: 'Stock', keywords: 'historique ligne traçabilite ledger' },
-  { id: 'REAPPRO', label: 'Réapprovisionnement', group: 'Stock', keywords: 'rupture seuil alerte commander' },
-  { id: 'TRANSFERTS', label: 'Transferts inter-dépôts', group: 'Stock', keywords: 'mouvement depot reorganisation' },
-  { id: 'REGULES_PLUS', label: 'Régules plus', group: 'Stock', keywords: 'correction entree ajustement' },
-  { id: 'REGULES_MOINS', label: 'Régules moins', group: 'Stock', keywords: 'correction sortie ajustement casse' },
-  { id: 'INVENTAIRES', label: 'Inventaire physique', group: 'Stock', keywords: 'comptage ecarts' },
-  { id: 'SITUATION', label: 'Situation générale', group: 'Stock', keywords: 'snapshot valorisation tresorerie synthese' },
+  // ---------- Consultation ----------
+  { id: 'ETAT_104', label: 'Etat 104 et Timbre', group: 'Consultation', keywords: 'releve clients annuel nif timbre', implemented: true },
+  { id: 'DECLARATION_TVA', label: 'Déclaration de la TVA', group: 'Consultation', keywords: 'taxe valeur ajoutee', implemented: true },
+  { id: 'ETAT_G50', label: 'Etat G50', group: 'Consultation', keywords: 'declaration mensuelle', implemented: false },
+  { id: 'STOCKS', label: 'Stocks', group: 'Consultation', keywords: 'quantites disponible depot', implemented: true },
+  { id: 'PRIX_ARTICLES', label: "Prix d'articles", group: 'Consultation', keywords: 'tarifs grille prix', implemented: true },
+  { id: 'MOUVEMENT_ARTICLE', label: "Mouvement d'un article", group: 'Consultation', keywords: 'historique tracabilite', implemented: true },
+  { id: 'SITUATION', label: 'Situation', group: 'Consultation', keywords: 'synthese valorisation', implemented: true },
+  { id: 'REAPPRO', label: 'Articles à réapprovisionner', group: 'Consultation', keywords: 'rupture seuil alerte', implemented: true },
+  { id: 'ETATS_ARTICLES', label: 'Etats des articles', group: 'Consultation', keywords: 'inventaire valorisation pump', implemented: true },
+  { id: 'JOURNAL_CAISSE', label: 'Journal de caisse', group: 'Consultation', keywords: 'especes', implemented: true },
+  { id: 'JOURNAL_BANQUE', label: 'Journal de banque', group: 'Consultation', keywords: 'bancaire releve', implemented: true },
+  { id: 'CREANCES_DETTES', label: 'Créances et dettes', group: 'Consultation', keywords: 'balance soldes', implemented: true },
+  { id: 'CREANCES_A_RECOUVRER', label: 'Créances à recouvrer', group: 'Consultation', keywords: 'recouvrement impayes', implemented: true },
+  { id: 'SUIVI_PARTENAIRE', label: "Suivi d'un partenaire", group: 'Consultation', keywords: 'releve compte historique', implemented: true },
+  { id: 'PARTENAIRES_BLOQUES', label: 'Liste des partenaires bloqués', group: 'Consultation', keywords: 'credit depasse seuil', implemented: true },
+  { id: 'LISTE_BONS_PREP', label: 'Liste des bons de préparations', group: 'Consultation', keywords: 'bp historique', implemented: true },
+  { id: 'CHIFFRE_AFFAIRES_AGENT', label: "Chiffre d'affaires par agent", group: 'Consultation', keywords: 'livreur commercial', implemented: true },
+  { id: 'CHIFFRE_AFFAIRES', label: "Chiffres d'affaires", group: 'Consultation', keywords: 'ca mensuel', implemented: true },
+  { id: 'VENTES_ARTICLES', label: "Ventes d'articles", group: 'Consultation', keywords: 'top produits rotation', implemented: true },
+  { id: 'ARCHIVE', label: "Consultation de l'archive", group: 'Consultation', keywords: 'annules anciens documents', implemented: true },
+  { id: 'TABLEAU_BORD', label: 'Tableau de bord', group: 'Consultation', keywords: 'kpi indicateurs', implemented: true },
+  { id: 'GRAPHE_INDICES', label: 'Graphe et indices des évaluations', group: 'Consultation', keywords: 'courbes statistiques', implemented: true },
 
-  // ---------- Trésorerie ----------
-  { id: 'JOURNAL_CAISSE', label: 'Journal de caisse', group: 'Trésorerie', keywords: 'especes cash' },
-  { id: 'JOURNAL_BANQUE', label: 'Journal de banque', group: 'Trésorerie', keywords: 'bancaire releve' },
-  { id: 'CHEQUES_RECETTE', label: 'Chèques reçus', group: 'Trésorerie', keywords: 'encaissement' },
-  { id: 'CHEQUES_DEPENSE', label: 'Chèques émis', group: 'Trésorerie', keywords: 'decaissement' },
-  { id: 'VIREMENT', label: 'Virements & versements', group: 'Trésorerie', keywords: 'banque transfert' },
-  { id: 'TRANSACTIONS_CAISSIERES', label: 'Toutes transactions', group: 'Trésorerie', keywords: 'operations caissieres' },
-  { id: 'CHARGES', label: 'Charges', group: 'Trésorerie', keywords: 'depenses frais loyer' },
+  // ---------- Outils ----------
+  { id: 'PARAMETRES', label: 'Paramètres', group: 'Outils', keywords: 'societe entete impression', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'SAUVEGARDE', label: 'Sauvegarder la base de données', group: 'Outils', keywords: 'backup export', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'RESTAURATION', label: 'Restaurer une base de données', group: 'Outils', keywords: 'restore import', implemented: false, roles: ['ADMINISTRATEUR'] },
+  { id: 'MODIFICATION', label: 'Modification', group: 'Outils', keywords: 'correction documents', implemented: false, roles: ['ADMINISTRATEUR'] },
+  { id: 'AFFICHAGE_TABLES', label: 'Affichage des tables', group: 'Outils', keywords: 'donnees brutes debug', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'UTILISATEURS', label: 'Gestion des Utilisateurs', group: 'Outils', keywords: 'comptes roles', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'INVENTAIRES', label: 'Inventaires', group: 'Outils', keywords: 'comptage ecarts', implemented: true },
+  { id: 'ARCHIVAGE', label: 'Archivage des données', group: 'Outils', keywords: 'exercice cloture export', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'MONTANTS_BLOCAGE', label: 'Calcul des montants de blocage', group: 'Outils', keywords: 'seuils credit recalcul', implemented: true, roles: ['ADMINISTRATEUR'] },
+  { id: 'REORGANISATION_STOCKS', label: 'Réorganisation des stocks', group: 'Outils', keywords: 'reorganiser depots', implemented: false, roles: ['ADMINISTRATEUR'] },
+  { id: 'IMPRIMANTE', label: 'Imprimante', group: 'Outils', keywords: 'impression modeles configuration', implemented: false, roles: ['ADMINISTRATEUR'] },
 
-  // ---------- Partenaires ----------
-  { id: 'PARTENAIRES', label: 'Partenaires', group: 'Partenaires', keywords: 'clients fournisseurs tiers repertoire' },
-  { id: 'SUIVI_PARTENAIRE', label: "Suivi d'un partenaire", group: 'Partenaires', keywords: 'releve compte historique' },
-  { id: 'CREANCES_DETTES', label: 'Créances & dettes', group: 'Partenaires', keywords: 'balance soldes' },
-  { id: 'CREANCES_A_RECOUVRER', label: 'Créances à recouvrer', group: 'Partenaires', keywords: 'recouvrement impayes relance' },
-  { id: 'PARTENAIRES_BLOQUES', label: 'Partenaires bloqués', group: 'Partenaires', keywords: 'credit depasse seuil' },
-  { id: 'MONTANTS_BLOCAGE', label: 'Montants de blocage', group: 'Partenaires', keywords: 'seuils autorises credit recalcul' },
-  { id: 'PARTNER_CATEGORIES', label: 'Catégories & tarifs', group: 'Partenaires', keywords: 'paliers tarifaires categorie' },
-  { id: 'ZONES', label: 'Zones', group: 'Partenaires', keywords: 'secteurs geographique' },
-
-  // ---------- Référentiel ----------
-  { id: 'ARTICLES', label: 'Articles & prix', group: 'Référentiel', keywords: 'produits catalogue tarifs prix' },
-  { id: 'DEPOTS', label: 'Dépôts', group: 'Référentiel', keywords: 'magasins entrepots' },
-  { id: 'LIVREURS', label: 'Livreurs', group: 'Référentiel', keywords: 'agents chauffeurs' },
-  { id: 'TYPE_REGLEMENTS', label: 'Types de règlement', group: 'Référentiel', keywords: 'conditions paiement' },
-  { id: 'CHARGE_CLASSES', label: 'Classes de charges', group: 'Référentiel', keywords: 'nature depenses' },
-
-  // ---------- Analyse ----------
-  { id: 'TABLEAU_BORD', label: 'Tableau de bord', group: 'Analyse', keywords: 'kpi accueil dashboard home' },
-  { id: 'CHIFFRE_AFFAIRES', label: "Chiffre d'affaires", group: 'Analyse', keywords: 'ca mensuel ventes' },
-  { id: 'CHIFFRE_AFFAIRES_AGENT', label: 'CA par agent', group: 'Analyse', keywords: 'livreur commercial performance' },
-  { id: 'VENTES_ARTICLES', label: "Ventes d'articles", group: 'Analyse', keywords: 'top produits rotation palmares' },
-  { id: 'GRAPHE_INDICES', label: 'Graphes & indices', group: 'Analyse', keywords: 'courbes evolution statistiques charts' },
-  { id: 'ARCHIVE', label: 'Archive des documents', group: 'Analyse', keywords: 'annules valides historique consultation tous types' },
-
-  // ---------- Fiscal ----------
-  { id: 'DECLARATION_TVA', label: 'Déclaration TVA', group: 'Fiscal', keywords: 'taxe valeur ajoutee' },
-  { id: 'ETAT_104', label: 'État 104 — relevé clients', group: 'Fiscal', keywords: 'releve clients annuel nif declaration' },
-  { id: 'ETAT_104_LISTE', label: 'Timbre fiscal encaissé', group: 'Fiscal', keywords: 'timbre 104 especes' },
-  { id: 'ETAT_G50', label: 'État G50', group: 'Fiscal', keywords: 'declaration mensuelle synthese' },
-
-  // ---------- Réglages ----------
-  { id: 'PARAMETRES', label: 'Paramètres société', group: 'Réglages', keywords: 'configuration entete impression', roles: ['ADMINISTRATEUR'] },
-  { id: 'UTILISATEURS', label: 'Utilisateurs', group: 'Réglages', keywords: 'comptes roles permissions', roles: ['ADMINISTRATEUR'] },
-  { id: 'SAUVEGARDE', label: 'Sauvegarde', group: 'Réglages', keywords: 'backup export base donnees', roles: ['ADMINISTRATEUR'] },
-  { id: 'ARCHIVAGE', label: 'Archivage', group: 'Réglages', keywords: 'export exercice annee cloture', roles: ['ADMINISTRATEUR'] },
-  { id: 'AFFICHAGE_TABLES', label: 'Tables (avancé)', group: 'Réglages', keywords: 'sql brut donnees debug', roles: ['ADMINISTRATEUR'] },
-  { id: 'A_PROPOS', label: 'À propos', group: 'Réglages', keywords: 'version aide raccourcis' }
+  // ---------- ? ----------
+  { id: 'A_PROPOS', label: 'À propos', group: 'Aide', keywords: 'version aide raccourcis', implemented: true }
 ];
 
 const BY_ID = new Map(SCREENS.map((s) => [s.id, s]));
@@ -246,7 +216,7 @@ export function visibleScreens(role: UserRole | undefined): ScreenDef[] {
   return SCREENS.filter((s) => !s.roles || (role && s.roles.includes(role)));
 }
 
-/** Accent-insensitive palette search, label-prefix matches first. */
+/** Recherche insensible aux accents; les écrans construits passent devant. */
 export function searchScreens(query: string, role: UserRole | undefined): ScreenDef[] {
   const pool = visibleScreens(role);
   const q = normalize(query.trim());
@@ -258,7 +228,7 @@ export function searchScreens(query: string, role: UserRole | undefined): Screen
       const haystack = normalize(`${s.label} ${s.keywords ?? ''} ${s.group}`);
       if (!terms.every((t) => haystack.includes(t))) return null;
       const label = normalize(s.label);
-      const score = label.startsWith(q) ? 0 : label.includes(q) ? 1 : 2;
+      const score = (label.startsWith(q) ? 0 : label.includes(q) ? 1 : 2) + (s.implemented ? 0 : 10);
       return { s, score };
     })
     .filter((x): x is { s: ScreenDef; score: number } => x !== null)

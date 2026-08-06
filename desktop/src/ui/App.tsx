@@ -3134,7 +3134,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           />
         )}
 
-        {currentView === 'TYPE_REGLEMENTS' && (
+        {currentView === 'TYPE_REGULES' && (
           <ReferenceDataScreen
             title="Types de règlement"
             description="Conditions de paiement proposées aux partenaires (comptant, 30 jours...)."
@@ -3201,15 +3201,6 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {currentView === 'VALIDATION_BON_PREP' && (
           <ValidationQueueScreen documents={documents} onChanged={refreshAll} onPrint={handlePrintDocument} />
         )}
-        {currentView === 'ACHATS_CONSULT' && (
-          <DocumentListScreen
-            title="Consultation des achats"
-            description="Historique des achats fournisseurs et de leurs avoirs."
-            documents={documents}
-            types={['ACHAT', 'RETOUR_FOURNISSEUR']}
-            onPrint={handlePrintDocument}
-          />
-        )}
         {currentView === 'LISTE_BONS_PREP' && (
           <DocumentListScreen
             title="Liste des bons de préparation"
@@ -3235,7 +3226,6 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {/* ---------- ANALYSE / FISCAL ---------- */}
         {currentView === 'CHIFFRE_AFFAIRES_AGENT' && <CALivreursScreen />}
         {currentView === 'DECLARATION_TVA' && <FiscalScreen kind="TVA" settings={settings} />}
-        {currentView === 'ETAT_104_LISTE' && <FiscalScreen kind="TIMBRE" settings={settings} />}
         {currentView === 'ETAT_104' && <Etat104Screen settings={settings} />}
         {currentView === 'ETAT_G50' && <NotImplementedScreen label="État G50" />}
 
