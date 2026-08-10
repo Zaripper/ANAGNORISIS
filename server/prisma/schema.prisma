@@ -32,10 +32,14 @@ enum DocumentType {
   TRANSFERT
 }
 
+/// EXPIRE: bon de preparation dont la duree de validite est depassee. La
+/// reservation de stock a ete liberee, le document reste consultable mais n'est
+/// plus validable. Un BP oublie ne doit pas immobiliser du stock indefiniment.
 enum DocumentStatus {
   OUVERT
   VALIDE
   ANNULE
+  EXPIRE
 }
 
 enum PaymentMode {
@@ -319,6 +323,11 @@ model Document {
   updatedAt          DateTime          @updatedAt
   validatedAt        DateTime?
   cancelledAt        DateTime?
+  /// Date limite de validite (bons de preparation). Figee a la creation a partir
+  /// du parametre BP_DUREE_VALIDITE_JOURS: changer le parametre ne doit pas faire
+  /// expirer retroactivement les bons deja prepares.
+  dateValidite       DateTime?
+  expiredAt          DateTime?
   lines              DocumentLine[]
   charges            Charge[]
   cashTransactions   CashTransaction[]
@@ -327,6 +336,8 @@ model Document {
   @@index([livreurId])
   @@index([type, status])
   @@index([createdAt])
+  /// Sert au balayage des bons de preparation echus.
+  @@index([status, dateValidite])
 }
 
 model DocumentLine {

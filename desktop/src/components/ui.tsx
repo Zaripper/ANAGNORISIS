@@ -236,9 +236,42 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
   return <span className={cx('px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap', TONES[tone])}>{children}</span>;
 }
 
+/**
+ * Description unique des statuts de document: libellé, ton du badge et classes
+ * de la puce compacte. Ajouter un statut ici suffit à le faire apparaître
+ * correctement partout — c'est ce qui a manqué quand EXPIRE est arrivé.
+ */
+const STATUS_LABELS: Record<string, string> = {
+  OUVERT: 'Ouvert',
+  VALIDE: 'Validé',
+  ANNULE: 'Annulé',
+  EXPIRE: 'Expiré'
+};
+
+const STATUS_TONE: Record<string, Tone> = {
+  OUVERT: 'warning',
+  VALIDE: 'success',
+  ANNULE: 'danger',
+  EXPIRE: 'neutral'
+};
+
+const STATUS_CHIP: Record<string, string> = {
+  OUVERT: 'bg-amber-50 text-amber-700',
+  VALIDE: 'bg-emerald-50 text-emerald-700',
+  ANNULE: 'bg-rose-50 text-rose-700',
+  EXPIRE: 'bg-slate-100 text-slate-500'
+};
+
+export function statusLabel(status: string) {
+  return STATUS_LABELS[status] ?? status;
+}
+
+export function statusChipClasses(status: string) {
+  return STATUS_CHIP[status] ?? STATUS_CHIP.OUVERT;
+}
+
 export function StatusBadge({ status }: { status: string }) {
-  const tone: Tone = status === 'VALIDE' ? 'success' : status === 'ANNULE' ? 'danger' : 'warning';
-  return <Badge tone={tone}>{status}</Badge>;
+  return <Badge tone={STATUS_TONE[status] ?? 'warning'}>{statusLabel(status)}</Badge>;
 }
 
 // ---------------------------------------------------------------------------
@@ -422,7 +455,7 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
 
 export interface ToastMessage {
   id: number;
-  tone: 'success' | 'error';
+  tone: 'success' | 'error' | 'info';
   text: string;
 }
 
@@ -445,6 +478,7 @@ export function useToasts() {
     toasts,
     success: (text: string) => push('success', text),
     error: (text: string) => push('error', text),
+    info: (text: string) => push('info', text),
     dismiss: (id: number) => setToasts((t) => t.filter((x) => x.id !== id))
   };
 }
@@ -458,7 +492,11 @@ export function ToastHost({ toasts, onDismiss }: { toasts: ToastMessage[]; onDis
           onClick={() => onDismiss(t.id)}
           className={cx(
             'pointer-events-auto cursor-pointer px-4 py-2.5 rounded-xl shadow-lg border text-xs font-medium max-w-sm',
-            t.tone === 'success' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-rose-600 text-white border-rose-700'
+            t.tone === 'success'
+              ? 'bg-emerald-600 text-white border-emerald-700'
+              : t.tone === 'info'
+                ? 'bg-slate-800 text-white border-slate-900'
+                : 'bg-rose-600 text-white border-rose-700'
           )}
         >
           {t.text}

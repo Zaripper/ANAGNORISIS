@@ -231,6 +231,45 @@ export type CreateChequeInput = z.infer<typeof createChequeSchema>;
 
 export const updateChequeEtatSchema = z.object({ etat: z.enum(chequeEtats) });
 
+// ---------- Validite des bons de preparation ----------
+/**
+ * Un bon de preparation reserve du stock sans le sortir. Sans date limite, un
+ * bon prepare puis oublie (client qui ne vient pas chercher sa commande)
+ * immobilise ce stock indefiniment: l'article apparait indisponible a la vente
+ * alors qu'il est physiquement en rayon. C'est la panne classique du poste de
+ * preparation, et la raison pour laquelle le logiciel actuel donne une duree de
+ * validite au bon.
+ *
+ * La duree est parametrable (BP_DUREE_VALIDITE_JOURS) mais la date limite est
+ * FIGEE a la creation: rallonger le parametre ne doit pas ressusciter des bons
+ * deja expires, et le raccourcir ne doit pas en faire expirer d'un coup.
+ */
+export const BP_DUREE_VALIDITE_JOURS_DEFAUT = 8;
+export const BP_DUREE_VALIDITE_KEY = 'BP_DUREE_VALIDITE_JOURS';
+
+/** Date limite de validite d'un bon cree a `from`, ou null si le type n'expire pas. */
+export function dateValiditeBP(from: Date, joursValidite: number): Date {
+  const limite = new Date(from);
+  limite.setDate(limite.getDate() + joursValidite);
+  return limite;
+}
+
+/**
+ * Lit la duree de validite depuis les parametres, en retombant sur la valeur par
+ * defaut si elle est absente, vide ou aberrante. Une duree de 0 jour ferait
+ * expirer chaque bon a l'instant de sa creation: on la refuse.
+ */
+export function parseDureeValiditeBP(raw: string | null | undefined): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return BP_DUREE_VALIDITE_JOURS_DEFAUT;
+  return Math.floor(n);
+}
+
+/** Jours restants avant echeance (negatif si depasse). */
+export function joursAvantEcheance(dateValidite: Date, now: Date = new Date()): number {
+  return Math.ceil((dateValidite.getTime() - now.getTime()) / 86400000);
+}
+
 // ---------- Blocage des partenaires ----------
 /**
  * Regle de blocage d'un client, reprise du logiciel actuel.

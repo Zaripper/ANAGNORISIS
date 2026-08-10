@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  type Column,
   DataTable,
   Input,
   Screen,
@@ -14,18 +15,37 @@ import {
   dateTime,
   money,
   num,
+  statusLabel,
   useToasts
 } from '../components/ui';
 import { describeError } from './ReferenceData';
 import type { Article, DocumentRow } from '../ui/App';
 
+/**
+ * Échéance d'un bon de préparation, exprimée en jours restants plutôt qu'en date:
+ * le préparateur a besoin de savoir combien de temps il lui reste, pas de
+ * soustraire deux dates de tête. Au-delà de l'échéance la réservation tombe et
+ * le bon n'est plus validable.
+ */
+function EcheanceBP({ dateValidite }: { dateValidite?: string | null }) {
+  if (!dateValidite) return <span className="text-slate-400">—</span>;
+
+  const jours = Math.ceil((new Date(dateValidite).getTime() - Date.now()) / 86400000);
+  if (jours < 0) return <Badge tone="danger">Échu</Badge>;
+  if (jours === 0) return <Badge tone="danger">Dernier jour</Badge>;
+  if (jours <= 2) return <Badge tone="warning">{jours} j</Badge>;
+  return <span className="text-slate-500 text-xs">{jours} j</span>;
+}
+
 /** Shared read-only document table used by the consultation screens. */
 function DocumentsTable({
   rows,
+  extraColumns,
   extraActions,
   emptyMessage
 }: {
   rows: DocumentRow[];
+  extraColumns?: Column<DocumentRow>[];
   extraActions?: (d: DocumentRow) => React.ReactNode;
   emptyMessage: string;
 }) {
@@ -38,6 +58,7 @@ function DocumentsTable({
         { key: 'date', header: 'Date', render: (d) => dateShort(d.createdAt) },
         { key: 'ttc', header: 'Total TTC', align: 'right', render: (d) => <span className="font-mono">{money(num(d.totalTTC))}</span> },
         { key: 'status', header: 'Statut', align: 'center', render: (d) => <StatusBadge status={d.status} /> },
+        ...(extraColumns ?? []),
         ...(extraActions ? [{ key: 'actions', header: '', align: 'right' as const, render: extraActions }] : [])
       ]}
       rows={rows}
@@ -63,6 +84,38 @@ export function ValidationQueueScreen({
   const toasts = useToasts();
   const [busyId, setBusyId] = useState<string | null>(null);
   const queue = useMemo(() => documents.filter((d) => d.type === 'BON_PREPARATION' && d.status === 'OUVERT'), [documents]);
+
+  /**
+   * Balayage des bons échus à l'ouverture de l'écran.
+   *
+   * Le poste serveur d'une petite structure n'est pas toujours allumé, donc une
+   * tâche planifiée ne suffit pas: une réservation ne doit pas survivre à un
+   * week-end machine éteinte. Le déclencheur est l'écran lui-même, qui est de
+   * toute façon consulté avant chaque validation.
+   */
+  useEffect(() => {
+    let annule = false;
+    (async () => {
+      try {
+        const { count } = await apiRequest<{ liberes: string[]; count: number }>(
+          '/documents/expire-bons-preparation',
+          { method: 'POST' }
+        );
+        if (annule || count === 0) return;
+        toasts.info(`${count} bon(s) échu(s) — réservations libérées.`);
+        await onChanged();
+      } catch {
+        // Le balayage est un entretien de fond: son échec ne doit pas empêcher
+        // l'écran de s'afficher ni la validation de fonctionner.
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+    // Volontairement au montage seulement: relancer le balayage à chaque
+    // rafraîchissement provoquerait une boucle (balayage -> onChanged -> rendu).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function act(doc: DocumentRow, action: 'validate' | 'delete') {
     setBusyId(doc.id);
@@ -93,6 +146,14 @@ export function ValidationQueueScreen({
           <DocumentsTable
             rows={queue}
             emptyMessage="Aucun bon en attente de validation."
+            extraColumns={[
+              {
+                key: 'validite',
+                header: 'Validité',
+                align: 'center',
+                render: (d: DocumentRow) => <EcheanceBP dateValidite={d.dateValidite} />
+              }
+            ]}
             extraActions={(d) => (
               <div className="flex justify-end gap-1.5">
                 <Button size="sm" variant="secondary" onClick={() => onPrint(d.id)}>
@@ -148,7 +209,7 @@ export function DocumentListScreen({
       );
   }, [documents, types, statuses, statusFilter, search]);
 
-  const statusChips = ['TOUS', ...(statuses ?? ['OUVERT', 'VALIDE', 'ANNULE'])];
+  const statusChips = ['TOUS', ...(statuses ?? ['OUVERT', 'VALIDE', 'ANNULE', 'EXPIRE'])];
 
   return (
     <Screen title={title} description={description} maxWidth="max-w-6xl">
@@ -166,7 +227,7 @@ export function DocumentListScreen({
                   statusFilter === s ? 'bg-[#0F5B38] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}
               >
-                {s}
+                {s === 'TOUS' ? 'Tous' : statusLabel(s)}
               </button>
             ))}
           </div>

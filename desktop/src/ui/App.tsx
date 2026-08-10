@@ -13,7 +13,20 @@ import {
   describeError
 } from '../screens/ReferenceData';
 import type { RefField } from '../screens/ReferenceData';
-import { Badge, Button, Card, Field, Input, Modal, Screen, Select, ToastHost, useToasts } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Modal,
+  Screen,
+  Select,
+  ToastHost,
+  statusChipClasses,
+  statusLabel,
+  useToasts
+} from '../components/ui';
 import { POSScreen } from '../screens/POS';
 import { ChargesScreen } from '../screens/Charges';
 import { DocumentListScreen, MouvementArticleScreen, ReapproScreen, ValidationQueueScreen } from '../screens/Consultation';
@@ -172,7 +185,9 @@ export interface DocumentRow {
   id: string;
   reference: string;
   type: string;
-  status: 'OUVERT' | 'VALIDE' | 'ANNULE';
+  status: 'OUVERT' | 'VALIDE' | 'ANNULE' | 'EXPIRE';
+  /** Bons de préparation uniquement: date au-delà de laquelle la réservation tombe. */
+  dateValidite?: string | null;
   totalHT?: number | string;
   totalTVA?: number | string;
   stampDuty?: number | string;
@@ -1226,14 +1241,15 @@ function TransfertScreen({
   );
 }
 
-function StatusBadgeSmall({ status }: { status: 'OUVERT' | 'VALIDE' | 'ANNULE' }) {
+/**
+ * Variante compacte du statut pour les listes denses. Les libellés et les
+ * couleurs viennent de `STATUS_TONE`/`STATUS_LABELS` afin qu'un nouvel état
+ * (EXPIRE, par exemple) n'ait à être décrit qu'à un seul endroit.
+ */
+function StatusBadgeSmall({ status }: { status: string }) {
   return (
-    <span
-      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-        status === 'VALIDE' ? 'bg-emerald-50 text-emerald-700' : status === 'ANNULE' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'
-      }`}
-    >
-      {status}
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusChipClasses(status)}`}>
+      {statusLabel(status)}
     </span>
   );
 }

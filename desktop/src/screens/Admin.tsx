@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { UserRole } from '@anagnorisis/shared';
+import { BP_DUREE_VALIDITE_KEY, type UserRole } from '@anagnorisis/shared';
 import { apiRequest } from '../services/apiClient';
 import { Badge, Button, Card, DataTable, Field, Input, Modal, Screen, Select, ToastHost, dateShort, useToasts } from '../components/ui';
 import { describeError } from './ReferenceData';
@@ -221,6 +221,19 @@ const SETTING_FIELDS: { key: string; label: string; hint?: string }[] = [
   { key: 'print.footer', label: 'Pied de page des impressions', hint: 'Affiché en bas des factures et tickets.' }
 ];
 
+/**
+ * Paramètres d'exploitation — ceux qui changent le comportement du logiciel, par
+ * opposition à l'identité imprimée sur les documents. Séparés visuellement pour
+ * qu'on ne les modifie pas par inadvertance en corrigeant une adresse.
+ */
+const EXPLOITATION_FIELDS: { key: string; label: string; hint?: string }[] = [
+  {
+    key: BP_DUREE_VALIDITE_KEY,
+    label: 'Validité des bons de préparation (jours)',
+    hint: "Passé ce délai, la réservation de stock est libérée et le bon n'est plus validable. Par défaut 8 jours."
+  }
+];
+
 export function SettingsScreen({ onSaved }: { onSaved: (settings: CompanySettings) => void }) {
   const toasts = useToasts();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -248,10 +261,18 @@ export function SettingsScreen({ onSaved }: { onSaved: (settings: CompanySetting
     }
   }
 
+  const champ = (f: { key: string; label: string; hint?: string }) => (
+    <div key={f.key} className={f.key === 'print.footer' || f.key === 'company.address' ? 'sm:col-span-2' : ''}>
+      <Field label={f.label} hint={f.hint}>
+        <Input value={values[f.key] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} />
+      </Field>
+    </div>
+  );
+
   return (
     <Screen
       title="Paramètres"
-      description="Identité de l'entreprise imprimée sur les factures, bons et tickets."
+      description="Identité de l'entreprise imprimée sur les documents, et règles d'exploitation."
       maxWidth="max-w-2xl"
       actions={
         <Button variant="primary" onClick={save} disabled={saving || loading}>
@@ -263,14 +284,15 @@ export function SettingsScreen({ onSaved }: { onSaved: (settings: CompanySetting
         {loading ? (
           <div className="text-slate-400 text-xs p-6 text-center">Chargement…</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {SETTING_FIELDS.map((f) => (
-              <div key={f.key} className={f.key === 'print.footer' || f.key === 'company.address' ? 'sm:col-span-2' : ''}>
-                <Field label={f.label} hint={f.hint}>
-                  <Input value={values[f.key] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} />
-                </Field>
-              </div>
-            ))}
+          <div className="flex flex-col gap-5">
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Identité de l'entreprise</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{SETTING_FIELDS.map(champ)}</div>
+            </div>
+            <div className="border-t border-slate-100 pt-4">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Exploitation</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{EXPLOITATION_FIELDS.map(champ)}</div>
+            </div>
           </div>
         )}
       </Card>

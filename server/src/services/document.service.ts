@@ -9,7 +9,10 @@ import {
   stockConsumingTypes,
   stockReceivingTypes,
   pumpRecalculatingTypes,
-  ledgerEffect
+  ledgerEffect,
+  BP_DUREE_VALIDITE_KEY,
+  dateValiditeBP,
+  parseDureeValiditeBP
 } from '../../../shared/src';
 
 type Tx = Prisma.TransactionClient;
@@ -194,6 +197,111 @@ async function enforceRationing(tx: Tx, type: DocumentType, lines: CreateDocumen
   }
 }
 
+/**
+ * Verrouille la ligne du document pour toute la duree de la transaction.
+ *
+ * Deux operations peuvent decider en meme temps du sort d'un meme document
+ * (un caissier qui valide, le balayage des bons echus qui libere), et toutes
+ * deux touchent qtyReserved. Sans verrou, les deux lisent "OUVERT", les deux
+ * agissent, et la reservation est relachee deux fois: le stock reserve part en
+ * negatif et l'article parait disponible au-dela du reel.
+ *
+ * Le verrou est pose AVANT la relecture du statut, sinon la relecture ne
+ * protege de rien: c'est lui qui rend le controle de statut significatif.
+ */
+async function lockDocument(tx: Tx, documentId: string) {
+  // $queryRaw et non $executeRaw: c'est un SELECT. Et pas de cast ::uuid — la
+  // colonne id est du texte cote Postgres (Prisma String), le cast ferait
+  // echouer la comparaison et le verrou ne porterait sur aucune ligne.
+  await tx.$queryRaw`SELECT id FROM "Document" WHERE id = ${documentId} FOR UPDATE`;
+}
+
+/**
+ * Date limite de validite a poser sur un document neuf. Seuls les bons de
+ * preparation en ont une: ce sont les seuls documents qui reservent du stock
+ * sans jamais le sortir, donc les seuls qui peuvent l'immobiliser pour rien.
+ */
+async function computeDateValidite(tx: Tx, type: DocumentType): Promise<Date | null> {
+  if (type !== 'BON_PREPARATION') return null;
+  const setting = await tx.appSetting.findUnique({ where: { key: BP_DUREE_VALIDITE_KEY } });
+  return dateValiditeBP(new Date(), parseDureeValiditeBP(setting?.value));
+}
+
+/** Identifiants des bons de preparation dont la date limite est depassee. */
+export async function scanBonsPreparationEchus(now: Date = new Date()): Promise<string[]> {
+  const echus = await prisma.document.findMany({
+    where: { type: 'BON_PREPARATION', status: 'OUVERT', dateValidite: { not: null, lt: now } },
+    select: { id: true }
+  });
+  return echus.map((d) => d.id);
+}
+
+/**
+ * Libere un bon echu: la reservation tombe, le document passe EXPIRE et reste
+ * consultable (le preparateur doit pouvoir comprendre pourquoi son bon n'est
+ * plus validable).
+ *
+ * Renvoie la reference liberee, ou null si le bon n'etait plus a liberer.
+ *
+ * La fonction est separee du balayage pour une raison de correction, pas de
+ * confort: entre le moment ou le balayage repere un bon et celui ou il le
+ * traite, un poste du reseau peut l'avoir valide. C'est ce decalage qui est
+ * dangereux — il conduirait a relacher deux fois la meme reservation — et le
+ * decouper ainsi permet de l'eprouver pour de vrai.
+ */
+export async function libererBonPreparation(documentId: string, now: Date = new Date()): Promise<string | null> {
+  return prisma.$transaction(async (tx) => {
+    await lockDocument(tx, documentId);
+    // Relecture APRES le verrou: c'est elle qui rattrape la validation
+    // concurrente. Sans elle, la reservation serait relachee ici ET a la
+    // validation, et qtyReserved partirait en negatif.
+    const document = await tx.document.findUnique({ where: { id: documentId }, include: { lines: true } });
+    if (!document || document.status !== 'OUVERT') return null;
+
+    await adjustReservations(
+      tx,
+      document.type as DocumentType,
+      document.lines.map((l) => ({
+        articleId: l.articleId,
+        depotId: l.depotId,
+        quantity: l.quantity,
+        unitPriceHT: Number(l.unitPriceHT),
+        discountPercent: Number(l.discountPercent),
+        tvaRate: Number(l.tvaRate),
+        totalHT: Number(l.totalHT),
+        totalTTC: Number(l.totalTTC),
+        purchaseCostPUMP: Number(l.purchaseCostPUMP)
+      })),
+      -1
+    );
+
+    await tx.document.update({ where: { id: documentId }, data: { status: 'EXPIRE', expiredAt: now } });
+    return document.reference;
+  }, TX_OPTIONS);
+}
+
+/**
+ * Balayage des bons de preparation echus.
+ *
+ * Chaque bon est traite dans sa propre transaction: un bon dont les lignes sont
+ * incoherentes ne doit pas empecher les autres d'etre liberes.
+ *
+ * Renvoie les references liberees.
+ */
+export async function expireBonsPreparation(now: Date = new Date()): Promise<string[]> {
+  const liberes: string[] = [];
+  for (const id of await scanBonsPreparationEchus(now)) {
+    try {
+      const reference = await libererBonPreparation(id, now);
+      if (reference) liberes.push(reference);
+    } catch (error) {
+      // Un bon impossible a liberer ne doit pas bloquer le balayage entier.
+      console.error(`[BP] echec de liberation du document ${id}`, error);
+    }
+  }
+  return liberes;
+}
+
 export async function createDocument(input: CreateDocumentInput, createdById?: string) {
   return prisma.$transaction(async (tx) => {
     if (input.partnerId) {
@@ -235,6 +343,7 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
         totalTTC: summary.totalTTC,
         marginHT: summary.marginHT,
         marginPercent: summary.marginPercent,
+        dateValidite: await computeDateValidite(tx, input.type),
         createdById: createdById ?? null,
         lines: { create: lines }
       },
@@ -328,6 +437,11 @@ export async function deleteDraftDocument(documentId: string) {
 
 export async function validateDocument(documentId: string, validatedById?: string) {
   return prisma.$transaction(async (tx) => {
+    // Verrou pris avant toute lecture: deux postes qui valident le meme document
+    // en meme temps, ou une validation concurrente du balayage des bons echus,
+    // sortiraient sinon le stock deux fois.
+    await lockDocument(tx, documentId);
+
     const document = await tx.document.findUnique({
       where: { id: documentId },
       include: { lines: true, partner: true }
@@ -335,6 +449,17 @@ export async function validateDocument(documentId: string, validatedById?: strin
     if (!document) throw new Error('DOCUMENT_NOT_FOUND');
     if (document.status === 'VALIDE') return document;
     if (document.status === 'ANNULE') throw new Error('DOCUMENT_CANCELLED');
+    if (document.status === 'EXPIRE') throw new Error('DOCUMENT_EXPIRE');
+
+    /**
+     * Un bon echu mais pas encore balaye ne doit pas passer entre les mailles:
+     * le balayage est periodique, la validation est immediate. Sans ce controle,
+     * valider juste avant le passage du balayage sortirait du stock sur un bon
+     * perime.
+     */
+    if (document.dateValidite && document.dateValidite < new Date()) {
+      throw new Error('DOCUMENT_EXPIRE');
+    }
 
     const type = document.type as DocumentType;
 

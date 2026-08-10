@@ -5,6 +5,7 @@ import {
   cancelDocument,
   createDocument,
   deleteDraftDocument,
+  expireBonsPreparation,
   factureFromBonLivraison,
   receiveCommande,
   updateDraftDocument,
@@ -499,6 +500,21 @@ api.post('/documents/:id/validate', async (req, res) => {
 api.post('/documents/:id/cancel', requireRole('ADMINISTRATEUR'), async (req, res) => {
   try {
     res.json(await cancelDocument(req.params.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+/**
+ * Balayage des bons de preparation echus. Declenche a l'ouverture de l'ecran des
+ * bons plutot que par une tache planifiee: le poste serveur d'une petite
+ * structure n'est pas toujours allume, et une reservation ne doit pas survivre a
+ * un week-end machine eteinte.
+ */
+api.post('/documents/expire-bons-preparation', async (_req, res) => {
+  try {
+    const liberes = await expireBonsPreparation();
+    res.json({ liberes, count: liberes.length });
   } catch (error) {
     handleError(res, error);
   }
