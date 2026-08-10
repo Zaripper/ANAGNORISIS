@@ -26,6 +26,7 @@ import { ArchivageScreen, SauvegardeScreen, TablesScreen } from '../screens/Main
 import { AccueilScreen } from '../screens/Accueil';
 import { ArticlesFichierScreen } from '../screens/ArticlesFichier';
 import { PartenairesFichierScreen } from '../screens/PartenairesFichier';
+import { ChequesScreen } from '../screens/Cheques';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -3324,18 +3325,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           <TransfertScreen depots={depots} articles={articles} documents={documents} onSaved={refreshAll} />
         )}
 
-        {/* ---------- CHÈQUES (recette/dépense) ---------- */}
-        {(currentView === 'CHEQUES_RECETTE' || currentView === 'CHEQUES_DEPENSE') && (
-          <PartnerSettlementScreen
-            title="Chèques"
-            paymentMode="CHEQUE"
-            mode={chequeMode}
-            onModeChange={(m) => setCurrentView(m === 'RECETTE' ? 'CHEQUES_RECETTE' : 'CHEQUES_DEPENSE')}
-            partners={partners}
-            transactions={cashTransactions}
-            onSaved={refreshAll}
-          />
-        )}
+        {/* ---------- CHEQUES: suivi par etat (recette / depense) ---------- */}
+        {currentView === 'CHEQUES_RECETTE' && <ChequesScreen type="RECETTE" partners={partners} onSaved={refreshAll} />}
+        {currentView === 'CHEQUES_DEPENSE' && <ChequesScreen type="DEPENSE" partners={partners} onSaved={refreshAll} />}
 
         {/* ---------- VIREMENT OU VERSEMENT ---------- */}
         {currentView === 'VIREMENT' && (

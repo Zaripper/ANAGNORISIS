@@ -10,6 +10,7 @@ import {
   updateDraftDocument,
   validateDocument
 } from '../services/document.service';
+import { changeChequeEtat, createCheque, listCheques } from '../services/cheque.service';
 import {
   getArticleMovements,
   getCAByLivreur,
@@ -25,6 +26,7 @@ import {
   createCashTransactionSchema,
   createChargeClassSchema,
   createChargeSchema,
+  createChequeSchema,
   createCommentSchema,
   createDepotSchema,
   createDocumentSchema,
@@ -35,6 +37,7 @@ import {
   createUserSchema,
   createZoneSchema,
   loginSchema,
+  updateChequeEtatSchema,
   updateSettingsSchema,
   updateUserSchema,
   paymentModes,
@@ -855,4 +858,27 @@ api.get('/admin/tables/:name', requireRole('ADMINISTRATEUR'), async (req, res) =
   const loader = BROWSABLE_TABLES[req.params.name as keyof typeof BROWSABLE_TABLES];
   if (!loader) return res.status(404).json({ message: 'TABLE_NOT_FOUND' });
   res.json(await loader());
+});
+
+// ---------- Cheques (cycle de vie) ----------
+api.get('/cheques', async (req, res) => {
+  const type = req.query.type === 'DEPENSE' ? 'DEPENSE' : 'RECETTE';
+  res.json(await listCheques(type));
+});
+
+api.post('/cheques', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
+  try {
+    res.status(201).json(await createCheque(createChequeSchema.parse(req.body), req.user?.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+api.put('/cheques/:id/etat', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
+  try {
+    const { etat } = updateChequeEtatSchema.parse(req.body);
+    res.json(await changeChequeEtat(req.params.id, etat));
+  } catch (error) {
+    handleError(res, error);
+  }
 });

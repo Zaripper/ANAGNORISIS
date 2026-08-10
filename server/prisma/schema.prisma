@@ -50,6 +50,18 @@ enum CashTxType {
   DEPENSE
 }
 
+/// Etats d'un cheque, repris du logiciel actuel.
+/// EN_INSTANCE: recu, pas encore remis en banque (cheques recette uniquement).
+/// MIS_EN_PAIEMENT: remis en banque (recette) ou emis (depense).
+/// PAYE: encaisse ou debite — c'est la que l'ecriture de banque est generee.
+/// ANNULE: impaye ou annule — les effets deja imputes sont contrepasses.
+enum ChequeEtat {
+  EN_INSTANCE
+  MIS_EN_PAIEMENT
+  PAYE
+  ANNULE
+}
+
 /// Politique de prix d'un article pour une categorie de partenaire.
 /// PRIX_SAISI: le prix de vente est saisi tel quel.
 /// TAUX: le prix est derive du P.U.M.P par application d'un taux de marge.
@@ -198,6 +210,7 @@ model Partner {
   updatedAt        DateTime          @updatedAt
   documents        Document[]
   cashTransactions CashTransaction[]
+  cheques          Cheque[]
   suppliedArticles Article[]         @relation("ArticleMainSupplier")
 
   @@index([categoryId])
@@ -353,6 +366,37 @@ model Charge {
   @@index([documentId])
 }
 
+/// Cheque suivi dans le temps, contrairement a une simple ecriture de caisse.
+///
+/// Effets comptables, volontairement explicites:
+///  - a la creation, le solde du partenaire est impute (le cheque vaut reglement);
+///  - au passage a PAYE, une ecriture de banque est generee;
+///  - a l'annulation, tout ce qui a ete impute est contrepasse.
+model Cheque {
+  id           String      @id @default(uuid())
+  /// RECETTE: cheque recu d'un client. DEPENSE: cheque emis a un fournisseur.
+  type         CashTxType
+  etat         ChequeEtat  @default(EN_INSTANCE)
+  numeroPiece  String?
+  datePiece    DateTime    @default(now())
+  partnerId    String
+  partner      Partner     @relation(fields: [partnerId], references: [id])
+  numeroCheque String
+  dateCheque   DateTime?
+  banque       String?
+  montant      Decimal
+  libelle      String?
+  /// Ecriture de banque generee au moment du passage a PAYE.
+  cashTransactionId String? @unique
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
+  createdById  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([type, etat])
+  @@index([partnerId])
+}
+
 model CashTransaction {
   id          String      @id @default(uuid())
   documentId  String?
@@ -366,6 +410,7 @@ model CashTransaction {
   paymentMode PaymentMode
   description String
   createdAt   DateTime    @default(now())
+  cheque      Cheque?
 
   @@index([createdAt])
   @@index([partnerId])

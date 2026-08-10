@@ -172,6 +172,65 @@ export function computeDocTotals(lines: TotalsLine[], remise: number, paymentMod
 }
 
 
+
+// ---------- Cheques ----------
+export const chequeEtats = ['EN_INSTANCE', 'MIS_EN_PAIEMENT', 'PAYE', 'ANNULE'] as const;
+export type ChequeEtat = (typeof chequeEtats)[number];
+
+/**
+ * Etats de depart selon le type, comme dans le logiciel actuel:
+ * un cheque RECU commence "en instance" (on l'a en main, pas encore remis),
+ * un cheque EMIS commence directement "mis en paiement" (il est parti).
+ */
+export function initialChequeEtat(type: CashTxType): ChequeEtat {
+  return type === 'RECETTE' ? 'EN_INSTANCE' : 'MIS_EN_PAIEMENT';
+}
+
+/**
+ * Transitions autorisees.
+ *
+ * On ne revient jamais en arriere (un cheque encaisse ne redevient pas "en
+ * instance"): cela ferait diverger la banque et le solde client sans trace.
+ *
+ * En revanche PAYE -> ANNULE reste ouvert, parce qu'un cheque rejete apres
+ * encaissement est un cas courant: la banque contrepasse plusieurs jours plus
+ * tard. Interdire ce passage obligerait a corriger a la main un impaye.
+ *
+ * ANNULE est le seul etat reellement terminal.
+ */
+export const CHEQUE_TRANSITIONS: Record<ChequeEtat, ChequeEtat[]> = {
+  EN_INSTANCE: ['MIS_EN_PAIEMENT', 'PAYE', 'ANNULE'],
+  MIS_EN_PAIEMENT: ['PAYE', 'ANNULE'],
+  PAYE: ['ANNULE'],
+  ANNULE: []
+};
+
+export function canTransitionCheque(from: ChequeEtat, to: ChequeEtat): boolean {
+  return CHEQUE_TRANSITIONS[from].includes(to);
+}
+
+export const CHEQUE_ETAT_LABELS: Record<ChequeEtat, string> = {
+  EN_INSTANCE: 'En instance',
+  MIS_EN_PAIEMENT: 'Mis en paiement',
+  PAYE: 'Payé',
+  ANNULE: 'Annulé'
+};
+
+export const createChequeSchema = z.object({
+  type: z.enum(cashTxTypes),
+  partnerId: z.string().uuid(),
+  numeroCheque: z.string().min(1),
+  montant: z.number().positive(),
+  numeroPiece: z.string().optional().nullable(),
+  datePiece: z.string().optional().nullable(),
+  dateCheque: z.string().optional().nullable(),
+  banque: z.string().optional().nullable(),
+  libelle: z.string().optional().nullable()
+});
+export type CreateChequeInput = z.infer<typeof createChequeSchema>;
+
+export const updateChequeEtatSchema = z.object({ etat: z.enum(chequeEtats) });
+
 // ---------- Blocage des partenaires ----------
 /**
  * Regle de blocage d'un client, reprise du logiciel actuel.
