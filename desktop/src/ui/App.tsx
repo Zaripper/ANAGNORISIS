@@ -25,6 +25,7 @@ import { GraphesScreen, MontantsBlocageScreen, SituationScreen } from '../screen
 import { ArchivageScreen, SauvegardeScreen, TablesScreen } from '../screens/Maintenance';
 import { AccueilScreen } from '../screens/Accueil';
 import { ArticlesFichierScreen } from '../screens/ArticlesFichier';
+import { PartenairesFichierScreen } from '../screens/PartenairesFichier';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -73,10 +74,29 @@ export interface Partner {
   categoryId: string;
   categoryLabel?: string;
   categoryIsSupplier?: boolean;
-  phone?: string;
+  zoneId?: string | null;
   address?: string;
+  pays?: string | null;
+  codePostal?: string | null;
+  ville?: string | null;
+  phone?: string;
+  fax?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  siteInternet?: string | null;
+  contact?: string | null;
+  rc?: string | null;
+  nif?: string | null;
+  ai?: string | null;
+  nis?: string | null;
+  nin?: string | null;
+  peutAvoirRefaction?: boolean;
   balance: number;
   seuilAutorise: number;
+  blocageActif?: boolean;
+  blocageDateReference?: string | null;
+  blocageJours?: number | null;
+  active?: boolean;
 }
 
 export interface Article {
@@ -2665,10 +2685,29 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           categoryId: p.categoryId,
           categoryLabel: p.category?.label,
           categoryIsSupplier: p.category?.isSupplier ?? false,
-          phone: p.phone ?? undefined,
+          zoneId: p.zoneId ?? null,
           address: p.address ?? undefined,
+          pays: p.pays ?? null,
+          codePostal: p.codePostal ?? null,
+          ville: p.ville ?? null,
+          phone: p.phone ?? undefined,
+          fax: p.fax ?? null,
+          mobile: p.mobile ?? null,
+          email: p.email ?? null,
+          siteInternet: p.siteInternet ?? null,
+          contact: p.contact ?? null,
+          rc: p.rc ?? null,
+          nif: p.nif ?? null,
+          ai: p.ai ?? null,
+          nis: p.nis ?? null,
+          nin: p.nin ?? null,
+          peutAvoirRefaction: Boolean(p.peutAvoirRefaction),
           balance: num(p.balance),
-          seuilAutorise: num(p.seuilAutorise)
+          seuilAutorise: num(p.seuilAutorise),
+          blocageActif: Boolean(p.blocageActif),
+          blocageDateReference: p.blocageDateReference ?? null,
+          blocageJours: p.blocageJours ?? null,
+          active: p.active !== false
         }))
       );
       setRawArticles(articlesRes);
@@ -3065,48 +3104,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {/* ---------- PARTENAIRES ---------- */}
         {currentView === 'PARTENAIRES' && (
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
-              <span className="font-extrabold text-slate-900 text-base">Répertoire des Partenaires</span>
-              <button
-                onClick={() => setShowNewPartnerModal(true)}
-                className="bg-[#0F5B38] hover:bg-[#0b462b] text-white font-medium px-4 py-2 rounded-xl transition shadow-xs text-xs"
-              >
-                + Nouveau Partenaire
-              </button>
-            </div>
-            <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
-                  <tr>
-                    <th className="p-3">Code</th>
-                    <th className="p-3">Raison Sociale</th>
-                    <th className="p-3">Catégorie</th>
-                    <th className="p-3 text-right">Solde</th>
-                    <th className="p-3 text-right">Seuil Autorisé</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {partners.map((p) => (
-                    <tr key={p.id} className={p.balance > p.seuilAutorise && p.seuilAutorise > 0 ? 'bg-rose-50/60' : ''}>
-                      <td className="p-3 font-mono font-bold text-[#0F5B38]">{p.code}</td>
-                      <td className="p-3 font-medium text-slate-800">{p.raisonSociale}</td>
-                      <td className="p-3 text-slate-500">{p.categoryLabel}</td>
-                      <td className="p-3 text-right font-mono">{p.balance.toFixed(2)} DZD</td>
-                      <td className="p-3 text-right font-mono text-slate-400">{p.seuilAutorise.toFixed(2)} DZD</td>
-                    </tr>
-                  ))}
-                  {partners.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Aucun partenaire.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <PartenairesFichierScreen partners={partners} categories={categories} zones={zones} onSaved={refreshAll} />
         )}
 
         {/* ---------- MASTER DATA (one screen per reference table) ---------- */}

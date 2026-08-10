@@ -166,15 +166,33 @@ model Partner {
   zone             Zone?             @relation(fields: [zoneId], references: [id])
   seuilAutorise    Decimal           @default(0.0)
   balance          Decimal           @default(0.0)
+  /// Coordonnees (bloc "Coordonnees" de la fiche partenaire)
   address          String?
+  pays             String?
+  codePostal       String?
+  ville            String?
   phone            String?
+  fax              String?
+  mobile           String?
   email            String?
-  /// Identifiants fiscaux — obligatoires pour l'État 104 et les mentions de facture.
+  siteInternet     String?
+  /// Personne a contacter chez ce partenaire.
+  contact          String?
+  /// Identifiants fiscaux — obligatoires pour l'Etat 104 et les mentions de facture.
+  /// nif correspond au champ "M.F." (matricule fiscal) du logiciel d'origine.
   nif              String?
   rc               String?
   ai               String?
   nis              String?
   nin              String?
+  /// Le partenaire est eligible a une refaction sur ses achats.
+  peutAvoirRefaction Boolean         @default(false)
+  /// Blocage: quand il est actif, le partenaire est bloque des que son solde
+  /// depasse `seuilAutorise`, ou que sa dette est ouverte depuis plus de
+  /// `blocageJours` jours a compter de `blocageDateReference`.
+  blocageActif         Boolean       @default(false)
+  blocageDateReference DateTime?
+  blocageJours         Int?
   active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

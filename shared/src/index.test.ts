@@ -3,6 +3,7 @@ import {
   TIMBRE_SEUIL_MIN,
   computeDocTotals,
   documentTypes,
+  evaluatePartnerBlocking,
   fiscalStamp,
   ledgerEffect,
   partnerRequiredTypes,
@@ -178,5 +179,73 @@ describe('computeDocTotals', () => {
     expect(totals.totalHT).toBe(0);
     expect(totals.marginPercent).toBe(0);
     expect(totals.stampDuty).toBe(0);
+  });
+});
+
+describe('evaluatePartnerBlocking', () => {
+  const REF = new Date('2026-01-01T00:00:00Z');
+  const NOW = new Date('2026-03-01T00:00:00Z'); // 59 jours apres la reference
+
+  function partner(over: Partial<Parameters<typeof evaluatePartnerBlocking>[0]> = {}) {
+    return {
+      balance: 0,
+      seuilAutorise: 0,
+      blocageActif: true,
+      blocageDateReference: REF,
+      blocageJours: 30,
+      ...over
+    };
+  }
+
+  it('ne bloque jamais un partenaire dont le blocage est desactive', () => {
+    const r = evaluatePartnerBlocking(partner({ blocageActif: false, balance: 999999, seuilAutorise: 10 }), NOW);
+    expect(r.blocked).toBe(false);
+    expect(r.reasons).toEqual([]);
+  });
+
+  it('bloque sur le montant quand le solde depasse le seuil', () => {
+    const r = evaluatePartnerBlocking(partner({ balance: 15000, seuilAutorise: 10000, blocageJours: null }), NOW);
+    expect(r.blocked).toBe(true);
+    expect(r.reasons).toEqual(['MONTANT']);
+  });
+
+  it('ne bloque pas quand le solde reste sous le seuil', () => {
+    const r = evaluatePartnerBlocking(partner({ balance: 9000, seuilAutorise: 10000, blocageJours: null }), NOW);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('un seuil a zero signifie "pas de plafond", pas "tout bloque"', () => {
+    // Regression: inverser cette convention bloquerait tous les clients en caisse.
+    const r = evaluatePartnerBlocking(partner({ balance: 500000, seuilAutorise: 0, blocageJours: null }), NOW);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('bloque sur l anciennete quand la dette depasse le nombre de jours', () => {
+    const r = evaluatePartnerBlocking(partner({ balance: 100, seuilAutorise: 0, blocageJours: 30 }), NOW);
+    expect(r.blocked).toBe(true);
+    expect(r.reasons).toEqual(['ANCIENNETE']);
+    expect(r.joursEcoules).toBe(59);
+  });
+
+  it('ne bloque pas sur l anciennete tant que le delai n est pas depasse', () => {
+    const r = evaluatePartnerBlocking(partner({ balance: 100, seuilAutorise: 0, blocageJours: 90 }), NOW);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('cumule les deux motifs quand ils sont reunis', () => {
+    const r = evaluatePartnerBlocking(partner({ balance: 15000, seuilAutorise: 10000, blocageJours: 30 }), NOW);
+    expect(r.blocked).toBe(true);
+    expect(r.reasons).toEqual(['MONTANT', 'ANCIENNETE']);
+  });
+
+  it('un solde nul ou crediteur ne bloque jamais, meme tres ancien', () => {
+    expect(evaluatePartnerBlocking(partner({ balance: 0, blocageJours: 1 }), NOW).blocked).toBe(false);
+    expect(evaluatePartnerBlocking(partner({ balance: -5000, blocageJours: 1 }), NOW).blocked).toBe(false);
+  });
+
+  it('sans date de reference, seul le montant peut bloquer', () => {
+    const r = evaluatePartnerBlocking(partner({ balance: 100, blocageDateReference: null, blocageJours: 1 }), NOW);
+    expect(r.blocked).toBe(false);
+    expect(r.joursEcoules).toBeNull();
   });
 });

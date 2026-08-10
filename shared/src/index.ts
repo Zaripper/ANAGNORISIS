@@ -171,6 +171,60 @@ export function computeDocTotals(lines: TotalsLine[], remise: number, paymentMod
   return { totalHT, totalTVA, stampDuty, totalTTC, marginHT, marginPercent };
 }
 
+
+// ---------- Blocage des partenaires ----------
+/**
+ * Regle de blocage d'un client, reprise du logiciel actuel.
+ *
+ * Deux conditions independantes, evaluees seulement si le blocage est actif
+ * pour ce partenaire:
+ *
+ *  1. MONTANT — le solde depasse le seuil autorise.
+ *  2. ANCIENNETE — la dette est ouverte depuis plus de `blocageJours` jours a
+ *     compter de la date de reference. C'est ce qui permet de bloquer un client
+ *     qui paie trop lentement, meme s'il reste sous son plafond.
+ *
+ * Un seuil a 0 signifie "pas de plafond", pas "tout est bloque": c'est la
+ * convention du logiciel d'origine et l'inverse serait catastrophique en caisse.
+ */
+export interface PartnerBlockingState {
+  balance: number;
+  seuilAutorise: number;
+  blocageActif: boolean;
+  blocageDateReference?: string | Date | null;
+  blocageJours?: number | null;
+}
+
+export interface PartnerBlockingResult {
+  blocked: boolean;
+  /** Motifs cumulables, pour pouvoir expliquer le blocage a l'ecran. */
+  reasons: ('MONTANT' | 'ANCIENNETE')[];
+  /** Jours ecoules depuis la date de reference, null si non applicable. */
+  joursEcoules: number | null;
+}
+
+export function evaluatePartnerBlocking(p: PartnerBlockingState, now: Date = new Date()): PartnerBlockingResult {
+  const reasons: PartnerBlockingResult['reasons'] = [];
+  let joursEcoules: number | null = null;
+
+  if (p.blocageDateReference) {
+    const ref = new Date(p.blocageDateReference);
+    if (!Number.isNaN(ref.getTime())) {
+      joursEcoules = Math.floor((now.getTime() - ref.getTime()) / 86400000);
+    }
+  }
+
+  if (!p.blocageActif) return { blocked: false, reasons, joursEcoules };
+
+  // Un solde nul ou crediteur ne bloque jamais, quelle que soit l'anciennete.
+  if (p.balance > 0) {
+    if (p.seuilAutorise > 0 && p.balance > p.seuilAutorise) reasons.push('MONTANT');
+    if (p.blocageJours != null && joursEcoules != null && joursEcoules > p.blocageJours) reasons.push('ANCIENNETE');
+  }
+
+  return { blocked: reasons.length > 0, reasons, joursEcoules };
+}
+
 // ---------- Auth ----------
 export const loginSchema = z.object({
   username: z.string().min(1),
@@ -196,8 +250,19 @@ export const createPartnerSchema = z.object({
   categoryId: z.string().uuid(),
   zoneId: z.string().uuid().optional().nullable(),
   address: z.string().optional().nullable(),
+  pays: z.string().optional().nullable(),
+  codePostal: z.string().optional().nullable(),
+  ville: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
+  fax: z.string().optional().nullable(),
+  mobile: z.string().optional().nullable(),
   email: z.string().optional().nullable(),
+  siteInternet: z.string().optional().nullable(),
+  contact: z.string().optional().nullable(),
+  peutAvoirRefaction: z.boolean().optional(),
+  blocageActif: z.boolean().optional(),
+  blocageDateReference: z.string().optional().nullable(),
+  blocageJours: z.number().int().nonnegative().optional().nullable(),
   // Identifiants fiscaux repris sur les factures et dans l'État 104.
   nif: z.string().optional().nullable(),
   rc: z.string().optional().nullable(),
