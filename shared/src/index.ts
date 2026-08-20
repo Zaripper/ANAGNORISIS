@@ -174,6 +174,108 @@ export function lineStockQuantity(line: Pick<TotalsLine, 'quantity' | 'quantiteB
   return line.quantity + (line.quantiteBonus ?? 0);
 }
 
+// ---------- Lots et péremption ----------
+export const LOT_ALERTE_JOURS_DEFAUT = 90;
+export const LOT_ALERTE_KEY = 'LOT_ALERTE_JOURS';
+
+export type LotEtat = 'PERIME' | 'ALERTE' | 'BON';
+
+export const LOT_ETAT_LABELS: Record<LotEtat, string> = {
+  PERIME: 'Périmé',
+  ALERTE: 'Bientôt périmé',
+  BON: 'Valide'
+};
+
+/** Jours restants avant péremption (négatif si dépassée). */
+export function joursAvantPeremption(datePeremption: Date, now: Date = new Date()): number {
+  return Math.ceil((datePeremption.getTime() - now.getTime()) / 86400000);
+}
+
+/**
+ * État d'un lot.
+ *
+ * La limite est franchie dès que la date est atteinte: un produit périmé
+ * aujourd'hui l'est déjà. Le « à consommer avant » d'une parapharmacie n'est pas
+ * une suggestion.
+ */
+export function lotEtat(datePeremption: Date, alerteJours: number, now: Date = new Date()): LotEtat {
+  const jours = joursAvantPeremption(datePeremption, now);
+  if (jours <= 0) return 'PERIME';
+  if (jours <= alerteJours) return 'ALERTE';
+  return 'BON';
+}
+
+export function lotEstPerime(datePeremption: Date, now: Date = new Date()): boolean {
+  return lotEtat(datePeremption, 0, now) === 'PERIME';
+}
+
+export function parseAlerteJours(raw: string | null | undefined): number {
+  // Une chaîne vide vaut « non configuré », pas zéro: `Number('')` rend 0, ce
+  // qui reviendrait à n'alerter que sur les lots déjà périmés — l'inverse de ce
+  // qu'attend quelqu'un qui n'a rien réglé. Zéro reste acceptable s'il est saisi
+  // explicitement.
+  if (raw == null || raw.trim() === '') return LOT_ALERTE_JOURS_DEFAUT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return LOT_ALERTE_JOURS_DEFAUT;
+  return Math.floor(n);
+}
+
+export interface LotDisponible {
+  id: string;
+  datePeremption: Date;
+  /** Quantité physiquement présente. */
+  qtyInStock: number;
+  /** Quantité déjà promise à d'autres documents. */
+  qtyReserved: number;
+}
+
+export interface AllocationLot {
+  lotId: string;
+  quantity: number;
+}
+
+/**
+ * Répartit une quantité sur les lots disponibles, au plus proche de la
+ * péremption d'abord (FEFO — First Expired, First Out).
+ *
+ * FEFO et non FIFO: en parapharmacie ce qui compte n'est pas l'ordre d'arrivée
+ * mais l'ordre de péremption. Un lot reçu hier peut périmer avant un lot reçu
+ * l'an dernier, et servir dans l'ordre d'arrivée le laisserait pourrir en rayon.
+ *
+ * Les lots périmés sont exclus: la marchandise existe toujours physiquement,
+ * mais elle n'est plus vendable. Sa sortie du stock reste un geste humain
+ * délibéré (régule moins), pas un effet de bord d'une vente.
+ *
+ * Lève si la quantité disponible ne suffit pas — mieux vaut refuser la vente que
+ * livrer un lot périmé ou promettre une marchandise absente.
+ */
+export function allouerFEFO(
+  lots: LotDisponible[],
+  quantite: number,
+  now: Date = new Date()
+): AllocationLot[] {
+  if (quantite <= 0) return [];
+
+  const utilisables = lots
+    .filter((l) => !lotEstPerime(l.datePeremption, now))
+    .map((l) => ({ ...l, disponible: l.qtyInStock - l.qtyReserved }))
+    .filter((l) => l.disponible > 0)
+    .sort((a, b) => a.datePeremption.getTime() - b.datePeremption.getTime());
+
+  const allocations: AllocationLot[] = [];
+  let reste = quantite;
+
+  for (const lot of utilisables) {
+    if (reste <= 0) break;
+    const prise = Math.min(reste, lot.disponible);
+    allocations.push({ lotId: lot.id, quantity: prise });
+    reste -= prise;
+  }
+
+  if (reste > 0) throw new Error('LOT_STOCK_INSUFFISANT');
+  return allocations;
+}
+
 // ---------- Emballage (colisage / vrac) ----------
 export const emballages = ['VRAC', 'COLISAGE'] as const;
 export type Emballage = (typeof emballages)[number];
@@ -442,6 +544,8 @@ export const createArticleSchema = z.object({
   mainSupplierId: z.string().uuid().optional().nullable(),
   // Mise en avant a la caisse.
   preferred: z.boolean().optional(),
+  /** Active le suivi par lot et date de péremption pour cet article. */
+  suiviLot: z.boolean().optional(),
   // Contingentement des produits rares: max par client et par document.
   maxQtyPerClient: z.number().int().positive().optional().nullable(),
   prices: z
@@ -566,7 +670,10 @@ export const documentLineInputSchema = z
     nbColis: z.number().int().nonnegative().optional().nullable(),
     numeroColis: z.string().max(60).optional().nullable(),
     quantiteBonus: z.number().int().nonnegative().default(0),
-    ristourne: z.number().nonnegative().default(0)
+    ristourne: z.number().nonnegative().default(0),
+    /** Entrées uniquement: lot et péremption saisis à la réception. */
+    numeroLot: z.string().max(60).optional().nullable(),
+    datePeremption: z.string().optional().nullable()
   })
   .superRefine((line, ctx) => {
     // Une ligne sans quantite ni bonus ne sort rien du stock et ne facture

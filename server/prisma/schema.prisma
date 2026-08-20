@@ -171,6 +171,7 @@ model Depot {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   stocks        ArticleStock[]
+  lots          Lot[]
   lines         DocumentLine[]
   documents     Document[]     @relation("DocumentSourceDepot")
   destDocuments Document[]     @relation("DocumentDestDepot")
@@ -250,6 +251,10 @@ model Article {
   tvaRate     Decimal        @default(19.0)
   /// Nombre d'unites par colis (0 = vendu uniquement a l'unite).
   colisage    Int            @default(0)
+  /// Suivi par lot et date de peremption. Optionnel article par article: le
+  /// catalogue existant n'a pas de lots, et l'imposer bloquerait chaque vente.
+  /// Seuls les articles ainsi marques exigent une allocation de lot.
+  suiviLot    Boolean        @default(false)
   /// Taux de refaction applicable a l'article, en pourcentage.
   tauxRefaction Decimal      @default(0.0)
   /// Stock de securite: quantite en dessous de laquelle il ne faut pas descendre.
@@ -271,6 +276,7 @@ model Article {
   updatedAt   DateTime       @updatedAt
   prices      ArticlePrice[]
   stocks      ArticleStock[]
+  lots        Lot[]
   lines       DocumentLine[]
 
   @@index([barcode])
@@ -306,6 +312,55 @@ model ArticleStock {
   updatedAt   DateTime @updatedAt
 
   @@unique([articleId, depotId])
+}
+
+/// Un lot de marchandise: meme article, meme depot, meme numero de lot, meme
+/// date de peremption.
+///
+/// Les lots NE SONT PAS une source de verite paralelle au stock: ArticleStock
+/// reste le total qui fait foi, et les lots en sont la ventilation. Toute
+/// operation qui touche l'un touche l'autre du meme montant, sans quoi les deux
+/// divergent et plus personne ne sait ce qu'il y a en rayon.
+///
+/// Le P.U.M.P reste porte par l'article, pas par le lot: le cout moyen pondere
+/// se calcule sur l'ensemble des entrees, quel que soit le lot.
+model Lot {
+  id             String            @id @default(uuid())
+  articleId      String
+  article        Article           @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  depotId        String
+  depot          Depot             @relation(fields: [depotId], references: [id], onDelete: Cascade)
+  numeroLot      String
+  datePeremption DateTime
+  qtyInStock     Int               @default(0)
+  qtyReserved    Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  allocations    DocumentLineLot[]
+
+  /// Un meme numero de lot peut exister dans deux depots: la cle inclut donc le depot.
+  @@unique([articleId, depotId, numeroLot, datePeremption])
+  /// Sert au balayage FEFO et a l'ecran des peremptions.
+  @@index([datePeremption])
+  @@index([articleId, depotId])
+}
+
+/// Repartition d'une ligne de document sur les lots reellement servis.
+///
+/// Une ligne peut couvrir plusieurs lots: demander 100 unites alors que le lot
+/// le plus proche de la peremption n'en contient que 60 doit servir 60 puis 40
+/// du suivant. Sans cette table, on ne saurait pas quel lot a ete livre a quel
+/// client -- l'information meme qu'un rappel de lot exige.
+model DocumentLineLot {
+  id             String       @id @default(uuid())
+  documentLineId String
+  documentLine   DocumentLine @relation(fields: [documentLineId], references: [id], onDelete: Cascade)
+  lotId          String
+  lot            Lot          @relation(fields: [lotId], references: [id])
+  quantity       Int
+
+  @@index([documentLineId])
+  @@index([lotId])
 }
 
 model Document {
@@ -387,6 +442,11 @@ model DocumentLine {
   quantiteBonus    Int      @default(0)
   /// Ristourne en valeur, appliquee apres la remise en pourcentage.
   ristourne        Decimal  @default(0.0)
+  /// Entrees uniquement: numero de lot et peremption saisis a la reception.
+  numeroLot        String?
+  datePeremption   DateTime?
+  /// Sorties uniquement: quels lots ont reellement ete servis.
+  lots             DocumentLineLot[]
 
   @@index([documentId])
   @@index([articleId])

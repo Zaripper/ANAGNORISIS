@@ -55,6 +55,7 @@ export type ScreenId =
   | 'ETAT_G50'
   | 'STOCKS'
   | 'PRIX_ARTICLES'
+  | 'LOTS'
   | 'MOUVEMENT_ARTICLE'
   | 'SITUATION'
   | 'REAPPRO'
@@ -162,6 +163,7 @@ export const SCREENS: ScreenDef[] = [
   { id: 'TRANSACTIONS_CAISSIERES', label: 'Transactions caissières', group: 'Mouvement', keywords: 'toutes operations', implemented: true },
 
   // ---------- Consultation ----------
+  { id: 'LOTS', label: 'Lots et péremptions', group: 'Consultation', keywords: 'peremption date lot fefo perime', implemented: true },
   { id: 'ETAT_104', label: 'Etat 104 et Timbre', group: 'Consultation', keywords: 'releve clients annuel nif timbre', implemented: true },
   { id: 'DECLARATION_TVA', label: 'Déclaration de la TVA', group: 'Consultation', keywords: 'taxe valeur ajoutee', implemented: true },
   { id: 'ETAT_G50', label: 'Etat G50', group: 'Consultation', keywords: 'declaration mensuelle', implemented: false },

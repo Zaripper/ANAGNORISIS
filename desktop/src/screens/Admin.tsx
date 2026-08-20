@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BP_DUREE_VALIDITE_KEY, type UserRole } from '@anagnorisis/shared';
+import { BP_DUREE_VALIDITE_KEY, LOT_ALERTE_KEY, type UserRole } from '@anagnorisis/shared';
 import { apiRequest } from '../services/apiClient';
 import { Badge, Button, Card, DataTable, Field, Input, Modal, Screen, Select, ToastHost, dateShort, useToasts } from '../components/ui';
 import { describeError } from './ReferenceData';
@@ -231,6 +231,11 @@ const EXPLOITATION_FIELDS: { key: string; label: string; hint?: string }[] = [
     key: BP_DUREE_VALIDITE_KEY,
     label: 'Validité des bons de préparation (jours)',
     hint: "Passé ce délai, la réservation de stock est libérée et le bon n'est plus validable. Par défaut 8 jours."
+  },
+  {
+    key: LOT_ALERTE_KEY,
+    label: 'Alerte avant péremption (jours)',
+    hint: "Un lot entre en alerte à ce délai de sa date de péremption. Par défaut 90 jours. Une fois périmé, il n'est plus jamais servi à la vente."
   }
 ];
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { cancelCashEntry, createCashEntry, validateCashEntry } from '../services/caisse.service';
+import { alerteJours, listerLots, valeurLotsPerimes } from '../services/lot.service';
 import {
   buildDocumentPreview,
   cancelDocument,
@@ -218,6 +219,7 @@ api.post('/articles', requireRole('ADMINISTRATEUR'), async (req, res) => {
         tauxRefaction: input.tauxRefaction ?? 0,
         mainSupplierId: input.mainSupplierId ?? null,
         preferred: input.preferred ?? false,
+        suiviLot: input.suiviLot ?? false,
         maxQtyPerClient: input.maxQtyPerClient ?? null,
         prices: { create: input.prices }
       },
@@ -517,6 +519,21 @@ api.post('/documents/expire-bons-preparation', async (_req, res) => {
   try {
     const liberes = await expireBonsPreparation();
     res.json({ liberes, count: liberes.length });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Lots et peremption ----------
+api.get('/lots', async (req, res) => {
+  try {
+    const perimesSeulement = req.query.perimes === '1';
+    const [lots, jours, valeurPerimee] = await Promise.all([
+      listerLots({ perimesSeulement }),
+      alerteJours(),
+      valeurLotsPerimes()
+    ]);
+    res.json({ lots, alerteJours: jours, valeurPerimee });
   } catch (error) {
     handleError(res, error);
   }

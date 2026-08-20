@@ -18,6 +18,7 @@ import {
   dateValiditeBP,
   parseDureeValiditeBP
 } from '../../../shared/src';
+import { entrerEnLot, libererLots, rendreAuxLots, reserverLots, sortirLots } from './lot.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -110,6 +111,9 @@ interface ComputedLine {
   numeroColis: string | null;
   quantiteBonus: number;
   ristourne: number;
+  /// Entrees uniquement: lot et peremption saisis a la reception.
+  numeroLot: string | null;
+  datePeremption: Date | null;
 }
 
 /**
@@ -146,6 +150,8 @@ function toComputedLine(l: {
   numeroColis: string | null;
   quantiteBonus: number;
   ristourne: Prisma.Decimal | number;
+  numeroLot: string | null;
+  datePeremption: Date | null;
 }): ComputedLine {
   return {
     articleId: l.articleId,
@@ -161,7 +167,9 @@ function toComputedLine(l: {
     nbColis: l.nbColis,
     numeroColis: l.numeroColis,
     quantiteBonus: l.quantiteBonus,
-    ristourne: Number(l.ristourne)
+    ristourne: Number(l.ristourne),
+    numeroLot: l.numeroLot,
+    datePeremption: l.datePeremption
   };
 }
 
@@ -202,10 +210,30 @@ async function computeLines(tx: Tx, lines: CreateDocumentInput['lines']): Promis
       nbColis: line.nbColis ?? null,
       numeroColis: line.numeroColis ?? null,
       quantiteBonus: line.quantiteBonus,
-      ristourne: line.ristourne
+      ristourne: line.ristourne,
+      numeroLot: line.numeroLot ?? null,
+      datePeremption: line.datePeremption ? new Date(line.datePeremption) : null
     });
   }
   return result;
+}
+
+/**
+ * Un article suivi par lot exige un numero de lot ET une peremption a l'entree.
+ *
+ * Le controle est fait a la saisie et non a la validation: accepter une entree
+ * sans lot creerait du stock qu'aucun lot ne couvre, et la ventilation ne
+ * pourrait plus jamais etre reconciliee avec le total.
+ */
+async function enforceLotsRequis(tx: Tx, type: DocumentType, lines: ComputedLine[]) {
+  if (!isReceiving(type)) return;
+  for (const line of lines) {
+    const article = await tx.article.findUnique({ where: { id: line.articleId } });
+    if (!article?.suiviLot) continue;
+    if (!line.numeroLot || !line.datePeremption) {
+      throw new Error(`LOT_REQUIS:${article.code}`);
+    }
+  }
 }
 
 /** Thin adapter over the shared totals function — the ONLY totals math in the app. */
@@ -352,6 +380,10 @@ export async function libererBonPreparation(documentId: string, now: Date = new 
       -1
     );
 
+    // Un bon echu rend sa reservation de lots comme il rend sa reservation de
+    // stock: les deux doivent tomber ensemble.
+    await libererLotsDuDocument(tx, documentId);
+
     await tx.document.update({ where: { id: documentId }, data: { status: 'EXPIRE', expiredAt: now } });
     return document.reference;
   }, TX_OPTIONS);
@@ -393,6 +425,7 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
     await enforceRationing(tx, input.type, input.lines);
 
     const lines = await computeLines(tx, input.lines);
+    await enforceLotsRequis(tx, input.type, lines);
     const summary = summarize(lines, input.remise, input.paymentMode);
     const reference = await nextReference(tx, input.type);
 
@@ -401,7 +434,7 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
     // validation.
     await adjustReservations(tx, input.type, lines, 1);
 
-    return tx.document.create({
+    const document = await tx.document.create({
       data: {
         type: input.type,
         reference,
@@ -426,7 +459,54 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
       },
       include: { lines: true, partner: true, depot: true, destDepot: true }
     });
+
+    await reserverLotsDuDocument(tx, input.type, document.lines);
+
+    return tx.document.findUniqueOrThrow({
+      where: { id: document.id },
+      include: { lines: { include: { lots: true } }, partner: true, depot: true, destDepot: true }
+    });
   }, TX_OPTIONS);
+}
+
+/**
+ * Reserve les lots des lignes sortantes d'un document et enregistre la
+ * repartition retenue.
+ *
+ * La repartition est stockee parce qu'elle est la seule trace de QUEL lot est
+ * parti chez QUEL client — exactement ce qu'un rappel de lot exige de savoir.
+ */
+async function reserverLotsDuDocument(
+  tx: Tx,
+  type: DocumentType,
+  lignes: { id: string; articleId: string; depotId: string; quantity: number; quantiteBonus: number }[]
+) {
+  if (!isConsuming(type) && !isTransfer(type)) return;
+
+  for (const ligne of lignes) {
+    const article = await tx.article.findUnique({ where: { id: ligne.articleId } });
+    if (!article?.suiviLot) continue;
+
+    const allocations = await reserverLots(tx, {
+      articleId: ligne.articleId,
+      depotId: ligne.depotId,
+      quantity: qtyStock(ligne)
+    });
+
+    for (const a of allocations) {
+      await tx.documentLineLot.create({
+        data: { documentLineId: ligne.id, lotId: a.lotId, quantity: a.quantity }
+      });
+    }
+  }
+}
+
+/** Libere les lots reserves par un document et efface la repartition. */
+async function libererLotsDuDocument(tx: Tx, documentId: string) {
+  const allocations = await tx.documentLineLot.findMany({ where: { documentLine: { documentId } } });
+  if (allocations.length === 0) return;
+  await libererLots(tx, allocations);
+  await tx.documentLineLot.deleteMany({ where: { documentLine: { documentId } } });
 }
 
 /** Replace the lines/totals of a draft (OUVERT) document, re-reserving stock from scratch. */
@@ -438,6 +518,11 @@ export async function updateDraftDocument(documentId: string, input: UpdateDocum
 
     const oldComputed: ComputedLine[] = existing.lines.map(toComputedLine);
     await adjustReservations(tx, existing.type as DocumentType, oldComputed, -1);
+    // Liberer AVANT la suppression des lignes: la cascade effacerait les
+    // allocations sans jamais decrementer qtyReserved des lots, et la
+    // reservation resterait posee pour toujours sur du stock que plus aucun
+    // document ne reclame.
+    await libererLotsDuDocument(tx, documentId);
     await tx.documentLine.deleteMany({ where: { documentId } });
 
     if (input.partnerId) {
@@ -450,6 +535,7 @@ export async function updateDraftDocument(documentId: string, input: UpdateDocum
     }
 
     const lines = await computeLines(tx, input.lines);
+    await enforceLotsRequis(tx, input.type, lines);
     const summary = summarize(lines, input.remise, input.paymentMode);
     await adjustReservations(tx, input.type, lines, 1);
 
@@ -487,6 +573,8 @@ export async function deleteDraftDocument(documentId: string) {
 
     const computed: ComputedLine[] = existing.lines.map(toComputedLine);
     await adjustReservations(tx, existing.type as DocumentType, computed, -1);
+    // Meme raison qu'a la modification: la cascade ne rendrait pas les lots.
+    await libererLotsDuDocument(tx, documentId);
     await tx.document.delete({ where: { id: documentId } });
     return { id: documentId, deleted: true };
   }, TX_OPTIONS);
@@ -532,6 +620,10 @@ export async function validateDocument(documentId: string, validatedById?: strin
         include: { lines: true, partner: true, depot: true, destDepot: true }
       });
     }
+
+    const allocationsParLigne = await tx.documentLineLot.findMany({
+      where: { documentLine: { documentId } }
+    });
 
     for (const line of document.lines) {
       const stock = await tx.articleStock.findUnique({
@@ -588,6 +680,19 @@ export async function validateDocument(documentId: string, validatedById?: strin
           });
           await tx.article.update({ where: { id: line.articleId }, data: { pump: newPump } });
           await tx.documentLine.update({ where: { id: line.id }, data: { purchaseCostPUMP: incomingCost } });
+
+          // La marchandise entre aussi dans son lot. Le bonus fournisseur y
+          // entre avec le reste: il est physiquement la, meme s'il n'a rien
+          // coute.
+          if (article.suiviLot && line.numeroLot && line.datePeremption) {
+            await entrerEnLot(tx, {
+              articleId: line.articleId,
+              depotId: line.depotId,
+              numeroLot: line.numeroLot,
+              datePeremption: line.datePeremption,
+              quantity: sortant
+            });
+          }
         } else {
           // Client returns (avoir vente) and stock-count corrections (régule plus):
           // stock comes back in, but this was never a real purchase, so the cost
@@ -596,6 +701,16 @@ export async function validateDocument(documentId: string, validatedById?: strin
             where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
             data: { qtyInStock: { increment: sortant } }
           });
+
+          if (article.suiviLot && line.numeroLot && line.datePeremption) {
+            await entrerEnLot(tx, {
+              articleId: line.articleId,
+              depotId: line.depotId,
+              numeroLot: line.numeroLot,
+              datePeremption: line.datePeremption,
+              quantity: sortant
+            });
+          }
         }
       } else if (isConsuming(type)) {
         // Sales, prep slips, avoir achat (return to supplier), régule moins: release
@@ -607,6 +722,14 @@ export async function validateDocument(documentId: string, validatedById?: strin
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
           data: { qtyReserved: { decrement: sortant }, qtyInStock: { decrement: sortant } }
         });
+
+        // Les lots suivent le meme mouvement, sur la repartition FEFO figee au
+        // brouillon. Le total et sa ventilation bougent donc du meme montant.
+        await sortirLots(
+          tx,
+          allocationsParLigne.filter((a) => a.documentLineId === line.id)
+        );
+
         await tx.documentLine.update({ where: { id: line.id }, data: { purchaseCostPUMP: Number(article.pump) } });
       }
       // PROFORMA: no stock effect at all.
@@ -695,6 +818,10 @@ export async function cancelDocument(documentId: string) {
       });
     }
 
+    const allocationsAnnulees = await tx.documentLineLot.findMany({
+      where: { documentLine: { documentId } }
+    });
+
     for (const line of document.lines) {
       // La contrepassation doit rendre EXACTEMENT ce que la validation avait
       // pris — bonus compris, sinon chaque annulation ferait fondre le stock de
@@ -745,6 +872,13 @@ export async function cancelDocument(documentId: string) {
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
           data: { qtyInStock: { increment: sortant } }
         });
+
+        // La marchandise revient dans le lot d'ou elle etait sortie, et pas
+        // dans un lot quelconque: son numero et sa peremption sont ceux-la.
+        await rendreAuxLots(
+          tx,
+          allocationsAnnulees.filter((a) => a.documentLineId === line.id)
+        );
       }
     }
 

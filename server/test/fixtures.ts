@@ -17,7 +17,7 @@ import { prisma } from '../src/prisma';
 export async function resetDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "Cheque", "DocumentLine", "Document", "CashTransaction", "Charge", "ChargeClass",
+      "DocumentLineLot", "Lot", "Cheque", "DocumentLine", "Document", "CashTransaction", "Charge", "ChargeClass",
       "ArticleStock", "ArticlePrice", "Article",
       "Partner", "PartnerCategory", "Zone", "Livreur", "TypeReglement",
       "Depot", "Comment", "AppSetting", "User"

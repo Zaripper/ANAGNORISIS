@@ -36,6 +36,7 @@ interface FormState {
   quantiteReappro: string;
   mainSupplierId: string;
   preferred: boolean;
+  suiviLot: boolean;
   maxQtyPerClient: string;
   prices: PriceRow[];
 }
@@ -55,6 +56,7 @@ function emptyForm(categories: PartnerCategoryOpt[]): FormState {
     quantiteReappro: '',
     mainSupplierId: '',
     preferred: false,
+    suiviLot: false,
     maxQtyPerClient: '',
     prices: categories.map((c) => ({ categoryId: c.id, policy: 'PRIX_SAISI' as PricePolicy, priceHT: '', taux: '' }))
   };
@@ -73,6 +75,7 @@ function formFromArticle(a: Article, categories: PartnerCategoryOpt[]): FormStat
     quantiteReappro: a.quantiteReappro == null ? '' : String(a.quantiteReappro),
     mainSupplierId: a.mainSupplierId ?? '',
     preferred: Boolean(a.preferred),
+    suiviLot: Boolean(a.suiviLot),
     maxQtyPerClient: a.maxQtyPerClient == null ? '' : String(a.maxQtyPerClient),
     prices: categories.map((c) => {
       const p = a.pricesByCategory[c.id];
@@ -157,6 +160,7 @@ export function ArticlesFichierScreen({
       quantiteReappro: optInt(form.quantiteReappro),
       mainSupplierId: form.mainSupplierId || null,
       preferred: form.preferred,
+      suiviLot: form.suiviLot,
       maxQtyPerClient: form.maxQtyPerClient.trim() === '' ? null : Math.max(1, Math.floor(Number(form.maxQtyPerClient) || 1)),
       prices: form.prices
         // Une ligne sans prix ni taux n'est pas un tarif: on ne la crée pas.
@@ -401,6 +405,21 @@ function ArticleIdentity({
             />
             Article préféré (mis en avant à la caisse)
           </label>
+          <label className="inline-flex items-center gap-2 text-xs text-slate-700 cursor-pointer ml-6">
+            <input
+              type="checkbox"
+              checked={form.suiviLot}
+              onChange={(e) => onChange({ suiviLot: e.target.checked })}
+              className="w-3.5 h-3.5"
+            />
+            Suivi par lot et date de péremption
+          </label>
+          {form.suiviLot && (
+            <p className="text-[10px] text-slate-400 mt-1 ml-6">
+              Chaque réception exigera un n° de lot et une date de péremption. À la vente, le lot le plus proche de la
+              péremption part en premier, et un lot périmé n'est jamais servi.
+            </p>
+          )}
         </div>
       </div>
     </Card>

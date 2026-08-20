@@ -41,6 +41,7 @@ import { ArticlesFichierScreen } from '../screens/ArticlesFichier';
 import { PartenairesFichierScreen } from '../screens/PartenairesFichier';
 import { ChequesScreen } from '../screens/Cheques';
 import { SaisieCaisseScreen } from '../screens/SaisieCaisse';
+import { LotsScreen } from '../screens/Lots';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -131,6 +132,8 @@ export interface Article {
   mainSupplierName?: string | null;
   /** Mis en avant a la caisse (onglet Preferes). */
   preferred?: boolean;
+  /** Suivi par lot et date de péremption. */
+  suiviLot?: boolean;
   /** Quantite maximale par client et par document (produits rares). */
   maxQtyPerClient?: number | null;
   stockGlobal: number; // summed available stock (in stock - reserved) across all depots
@@ -3374,6 +3377,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
             onPrint={handlePrintDocument}
           />
         )}
+        {currentView === 'LOTS' && <LotsScreen />}
         {currentView === 'MOUVEMENT_ARTICLE' && <MouvementArticleScreen articles={articles} />}
         {currentView === 'REAPPRO' && <ReapproScreen articles={articles} onChanged={refreshAll} />}
 
