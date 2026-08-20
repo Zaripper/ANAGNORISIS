@@ -25,6 +25,7 @@ import {
   Badge,
   Button,
   Card,
+  DateRangeFilter,
   Field,
   Input,
   Modal,
@@ -34,6 +35,7 @@ import {
   ToastHost,
   statusChipClasses,
   statusLabel,
+  useDateRange,
   useTextFilter,
   useToasts
 } from '../components/ui';
@@ -1625,8 +1627,18 @@ function PartnerSettlementScreen({
  * banque (everything except ESPECE), and Transactions caissières (everything).
  */
 function CashJournalTable({ title, transactions }: { title: string; transactions: CashTransaction[] }) {
-  const totalRecette = transactions.filter((t) => t.type === 'RECETTE').reduce((acc, t) => acc + num(t.amount), 0);
-  const totalDepense = transactions.filter((t) => t.type === 'DEPENSE').reduce((acc, t) => acc + num(t.amount), 0);
+  const periode = useDateRange(transactions, (t) => t.createdAt);
+  const { search, setSearch, filtered } = useTextFilter(periode.filtered, (t) => [
+    t.description,
+    t.reference,
+    t.partner?.raisonSociale,
+    t.bankName
+  ]);
+
+  // Les totaux portent sur ce qui est AFFICHE: filtrer sur un mois doit donner
+  // le solde de ce mois, pas celui de toute l'histoire.
+  const totalRecette = filtered.filter((t) => t.type === 'RECETTE').reduce((acc, t) => acc + num(t.amount), 0);
+  const totalDepense = filtered.filter((t) => t.type === 'DEPENSE').reduce((acc, t) => acc + num(t.amount), 0);
   const solde = totalRecette - totalDepense;
 
   return (
@@ -1649,6 +1661,21 @@ function CashJournalTable({ title, transactions }: { title: string; transactions
         </div>
       </div>
 
+      <div className="bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-xs flex items-center gap-3 flex-wrap shrink-0">
+        <div className="max-w-xs flex-1 min-w-[180px]">
+          <SearchInput value={search} onChange={setSearch} placeholder="Libellé, pièce ou partenaire…" />
+        </div>
+        <DateRangeFilter
+          du={periode.du}
+          au={periode.au}
+          onDu={periode.setDu}
+          onAu={periode.setAu}
+          onReset={periode.reset}
+          actif={periode.actif}
+        />
+        <span className="ml-auto text-slate-400 text-[11px]">{filtered.length} écriture(s)</span>
+      </div>
+
       <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
@@ -1662,7 +1689,7 @@ function CashJournalTable({ title, transactions }: { title: string; transactions
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {transactions.map((t) => (
+            {filtered.map((t) => (
               <tr key={t.id}>
                 <td className="p-3">{new Date(t.createdAt).toLocaleString('fr-FR')}</td>
                 <td className="p-3 font-medium text-slate-800">{t.description}</td>
@@ -1683,7 +1710,7 @@ function CashJournalTable({ title, transactions }: { title: string; transactions
                 </td>
               </tr>
             ))}
-            {transactions.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-slate-400">
                   Aucune transaction.

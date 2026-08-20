@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { dansIntervalleDates, enDateInput, exerciceCourant, moisCourant } from '@anagnorisis/shared';
 
 /**
  * Shared UI primitives for the whole application.
@@ -215,6 +216,92 @@ export function normaliser(v: string) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
+}
+
+/**
+ * Filtre une liste sur une période.
+ *
+ * Regroupé pour la même raison que `useTextFilter`: la mécanique se recopiait
+ * d'écran en écran. Les bornes sont inclusives et raisonnent en jours entiers
+ * (voir `dansIntervalleDates`), et les raccourcis évitent de saisir deux dates
+ * pour la question la plus fréquente — « et aujourd'hui ? ».
+ */
+export function useDateRange<T>(rows: T[], getDate: (row: T) => string | Date | null | undefined) {
+  const [du, setDu] = useState('');
+  const [au, setAu] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!du && !au) return rows;
+    return rows.filter((row) => dansIntervalleDates(getDate(row), du, au));
+    // `getDate` est une lambda recréée à chaque rendu: la lister relancerait le
+    // filtre en permanence sans changer le résultat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, du, au]);
+
+  return { du, setDu, au, setAu, filtered, actif: !!(du || au), reset: () => { setDu(''); setAu(''); } };
+}
+
+/**
+ * Sélecteur de période: deux dates et trois raccourcis.
+ *
+ * `Aujourd'hui` pose la même date des deux côtés — d'où l'importance que la
+ * borne de fin couvre la journée entière, sans quoi ce bouton ne rendrait
+ * jamais rien.
+ */
+export function DateRangeFilter({
+  du,
+  au,
+  onDu,
+  onAu,
+  onReset,
+  actif
+}: {
+  du: string;
+  au: string;
+  onDu: (v: string) => void;
+  onAu: (v: string) => void;
+  onReset: () => void;
+  actif: boolean;
+}) {
+  const poser = (bornes: { du: string; au: string }) => {
+    onDu(bornes.du);
+    onAu(bornes.au);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Du</label>
+      <input
+        type="date"
+        value={du}
+        onChange={(e) => onDu(e.target.value)}
+        className={cx(CONTROL, FOCUS, 'w-32 py-1')}
+        aria-label="Date de début"
+      />
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Au</label>
+      <input
+        type="date"
+        value={au}
+        onChange={(e) => onAu(e.target.value)}
+        className={cx(CONTROL, FOCUS, 'w-32 py-1')}
+        aria-label="Date de fin"
+      />
+      <Button size="sm" variant="secondary" onClick={() => poser({ du: enDateInput(new Date()), au: enDateInput(new Date()) })}>
+        Aujourd&rsquo;hui
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => poser(moisCourant())}>
+        Ce mois
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => poser(exerciceCourant())}>
+        Exercice
+      </Button>
+      {actif && (
+        <Button size="sm" variant="ghost" onClick={onReset}>
+          Tout
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /** Debounced-feel search box with a magnifier affordance and clear button. */

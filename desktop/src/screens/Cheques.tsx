@@ -1,7 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CHEQUE_ETAT_LABELS, canTransitionCheque, type ChequeEtat } from '@anagnorisis/shared';
 import { apiRequest } from '../services/apiClient';
-import { Badge, Button, Card, DataTable, Field, Input, Modal, Screen, SearchInput, Select, ToastHost, dateShort, money, num, useToasts } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  DateRangeFilter,
+  Field,
+  Input,
+  Modal,
+  Screen,
+  SearchInput,
+  Select,
+  ToastHost,
+  dateShort,
+  money,
+  num,
+  useDateRange,
+  useTextFilter,
+  useToasts
+} from '../components/ui';
 import { describeError } from './ReferenceData';
 import type { Partner } from '../ui/App';
 
@@ -50,7 +69,6 @@ export function ChequesScreen({
   const [rows, setRows] = useState<ChequeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
   // Un chèque émis ne passe jamais par « en instance »: il est parti dès sa création.
@@ -80,18 +98,22 @@ export function ChequesScreen({
     return c;
   }, [rows]);
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows
-      .filter((r) => r.etat === tab)
-      .filter(
-        (r) =>
-          !q ||
-          r.numeroCheque.toLowerCase().includes(q) ||
-          (r.partner?.raisonSociale ?? '').toLowerCase().includes(q) ||
-          (r.banque ?? '').toLowerCase().includes(q)
-      );
-  }, [rows, tab, search]);
+  /**
+   * La période porte sur la date de la pièce, pas sur celle de l'encaissement:
+   * on cherche « les chèques de mars », c'est-à-dire ceux reçus en mars, quel
+   * que soit le jour où la banque les a passés.
+   */
+  const periode = useDateRange(rows, (r) => r.datePiece);
+
+  const parEtat = useMemo(() => periode.filtered.filter((r) => r.etat === tab), [periode.filtered, tab]);
+
+  const { search, setSearch, filtered: visible } = useTextFilter(parEtat, (r) => [
+    r.numeroCheque,
+    r.partner?.raisonSociale,
+    r.partner?.code,
+    r.banque,
+    r.libelle
+  ]);
 
   const total = visible.reduce((s, r) => s + num(r.montant), 0);
 
@@ -128,6 +150,16 @@ export function ChequesScreen({
       }
     >
       <Card className="flex-1 min-h-0" padded={false}>
+        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <DateRangeFilter
+            du={periode.du}
+            au={periode.au}
+            onDu={periode.setDu}
+            onAu={periode.setAu}
+            onReset={periode.reset}
+            actif={periode.actif}
+          />
+        </div>
         <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
           <div className="flex gap-1">
             {tabs.map((t) => (

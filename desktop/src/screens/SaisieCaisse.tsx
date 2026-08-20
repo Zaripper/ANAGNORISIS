@@ -10,12 +10,15 @@ import {
   Input,
   Modal,
   Screen,
+  DateRangeFilter,
   SearchInput,
   Select,
   ToastHost,
   dateTime,
   money,
   num,
+  useDateRange,
+  useTextFilter,
   useToasts
 } from '../components/ui';
 import { describeError } from './ReferenceData';
@@ -56,7 +59,6 @@ export function SaisieCaisseScreen({ partners, onSaved }: { partners: Partner[];
   const toasts = useToasts();
   const [rows, setRows] = useState<CashRow[]>([]);
   const [tab, setTab] = useState<CashStatus>('OUVERT');
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -78,18 +80,15 @@ export function SaisieCaisseScreen({ partners, onSaved }: { partners: Partner[];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const visibles = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows
-      .filter((r) => r.status === tab)
-      .filter(
-        (r) =>
-          !q ||
-          r.description.toLowerCase().includes(q) ||
-          (r.partner?.raisonSociale ?? '').toLowerCase().includes(q) ||
-          (r.reference ?? '').toLowerCase().includes(q)
-      );
-  }, [rows, tab, search]);
+  const periode = useDateRange(rows, (r) => r.createdAt);
+
+  const parStatut = useMemo(() => periode.filtered.filter((r) => r.status === tab), [periode.filtered, tab]);
+
+  const { search, setSearch, filtered: visibles } = useTextFilter(parStatut, (r) => [
+    r.description,
+    r.partner?.raisonSociale,
+    r.reference
+  ]);
 
   /** Solde net des écritures affichées: recettes moins dépenses. */
   const soldeAffiche = visibles.reduce((s, r) => s + num(r.amount) * (r.type === 'RECETTE' ? 1 : -1), 0);
@@ -124,6 +123,16 @@ export function SaisieCaisseScreen({ partners, onSaved }: { partners: Partner[];
       }
     >
       <Card className="flex-1 min-h-0" padded={false}>
+        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <DateRangeFilter
+            du={periode.du}
+            au={periode.au}
+            onDu={periode.setDu}
+            onAu={periode.setAu}
+            onReset={periode.reset}
+            actif={periode.actif}
+          />
+        </div>
         <div className="p-3 border-b border-slate-100 flex items-center gap-3">
           <div className="flex gap-1">
             {(['OUVERT', 'VALIDE', 'ANNULE'] as CashStatus[]).map((s) => (

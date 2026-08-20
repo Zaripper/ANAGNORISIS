@@ -176,6 +176,71 @@ export function lineStockQuantity(line: Pick<TotalsLine, 'quantity' | 'quantiteB
   return line.quantity + (line.quantiteBonus ?? 0);
 }
 
+// ---------- Filtrage par période ----------
+/**
+ * Une valeur tombe-t-elle dans l'intervalle [du, au] ?
+ *
+ * Les deux bornes sont INCLUSIVES et exprimées en jours: `au = 2026-03-12`
+ * comprend toute la journée du 12, jusqu'à 23:59:59. Comparer bêtement à
+ * `new Date('2026-03-12')` exclurait tout ce qui s'est passé après minuit, et
+ * une recherche sur une seule journée ne rendrait jamais rien — le genre de
+ * détail qui fait dire que « le filtre ne marche pas ».
+ *
+ * Une borne vide ne contraint pas ce côté-là.
+ */
+export function dansIntervalleDates(
+  valeur: Date | string | null | undefined,
+  du?: string | null,
+  au?: string | null
+): boolean {
+  if (!valeur) return !du && !au;
+
+  const d = valeur instanceof Date ? valeur : new Date(valeur);
+  if (Number.isNaN(d.getTime())) return false;
+
+  if (du) {
+    const debut = new Date(du);
+    if (!Number.isNaN(debut.getTime())) {
+      debut.setHours(0, 0, 0, 0);
+      if (d < debut) return false;
+    }
+  }
+
+  if (au) {
+    const fin = new Date(au);
+    if (!Number.isNaN(fin.getTime())) {
+      fin.setHours(23, 59, 59, 999);
+      if (d > fin) return false;
+    }
+  }
+
+  return true;
+}
+
+/** Bornes du mois courant, au format d'un <input type="date">. */
+export function moisCourant(now: Date = new Date()): { du: string; au: string } {
+  const debut = new Date(now.getFullYear(), now.getMonth(), 1);
+  const fin = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { du: enDateInput(debut), au: enDateInput(fin) };
+}
+
+/** Bornes de l'exercice en cours (année civile: 1er janvier au 31 décembre). */
+export function exerciceCourant(now: Date = new Date()): { du: string; au: string } {
+  return { du: `${now.getFullYear()}-01-01`, au: `${now.getFullYear()}-12-31` };
+}
+
+/**
+ * Date locale au format `YYYY-MM-DD`.
+ *
+ * `toISOString()` convertit en UTC et décale donc la date d'un jour selon
+ * l'heure et le fuseau: un mouvement du soir se retrouverait daté du lendemain.
+ */
+export function enDateInput(d: Date): string {
+  const mois = String(d.getMonth() + 1).padStart(2, '0');
+  const jour = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mois}-${jour}`;
+}
+
 // ---------- Lots et péremption ----------
 export const LOT_ALERTE_JOURS_DEFAUT = 90;
 export const LOT_ALERTE_KEY = 'LOT_ALERTE_JOURS';

@@ -6,6 +6,7 @@ import {
   Card,
   type Column,
   DataTable,
+  DateRangeFilter,
   Input,
   Screen,
   SearchInput,
@@ -16,6 +17,8 @@ import {
   money,
   num,
   statusLabel,
+  useDateRange,
+  useTextFilter,
   useToasts
 } from '../components/ui';
 import { describeError } from './ReferenceData';
@@ -205,32 +208,49 @@ export function DocumentListScreen({
   statuses?: string[];
   onPrint: (docId: string) => void;
 }) {
-  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TOUS');
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return documents
-      .filter((d) => types.includes(d.type))
-      .filter((d) => (statuses ? statuses.includes(d.status) : true))
-      .filter((d) => (statusFilter === 'TOUS' ? true : d.status === statusFilter))
-      .filter(
-        (d) =>
-          !q ||
-          d.reference.toLowerCase().includes(q) ||
-          (d.partner?.raisonSociale ?? '').toLowerCase().includes(q) ||
-          (d.partner?.code ?? '').toLowerCase().includes(q)
-      );
-  }, [documents, types, statuses, statusFilter, search]);
+  /**
+   * Filtre par période sur la date du document. C'est la date de saisie qui
+   * fait foi, pas celle de validation: un bon préparé le 12 et validé le 15
+   * reste un document du 12 pour qui le cherche.
+   */
+  const periode = useDateRange(documents, (d) => d.createdAt);
+
+  const parType = useMemo(
+    () =>
+      periode.filtered
+        .filter((d) => types.includes(d.type))
+        .filter((d) => (statuses ? statuses.includes(d.status) : true))
+        .filter((d) => (statusFilter === 'TOUS' ? true : d.status === statusFilter)),
+    [periode.filtered, types, statuses, statusFilter]
+  );
+
+  const { search, setSearch, filtered: rows } = useTextFilter(parType, (d) => [
+    d.reference,
+    d.partner?.raisonSociale,
+    d.partner?.code,
+    d.motif
+  ]);
 
   const statusChips = ['TOUS', ...(statuses ?? ['OUVERT', 'VALIDE', 'ANNULE', 'EXPIRE'])];
 
   return (
     <Screen title={title} description={description} maxWidth="max-w-6xl">
       <Card className="flex-1 min-h-0" padded={false}>
+        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <DateRangeFilter
+            du={periode.du}
+            au={periode.au}
+            onDu={periode.setDu}
+            onAu={periode.setAu}
+            onReset={periode.reset}
+            actif={periode.actif}
+          />
+        </div>
         <div className="p-3 border-b border-slate-100 flex items-center gap-3">
           <div className="flex-1 max-w-sm">
-            <SearchInput value={search} onChange={setSearch} placeholder="Référence ou partenaire…" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Référence, partenaire ou motif…" />
           </div>
           <div className="flex gap-1">
             {statusChips.map((s) => (
