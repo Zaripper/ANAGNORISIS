@@ -176,15 +176,97 @@ export function ReferenceDataScreen<T extends RefEntity>({
 }
 
 /** Turns API error codes into something a shop manager can act on. */
+/**
+ * Traduction des codes d'erreur du serveur.
+ *
+ * Le serveur répond par des codes stables (`LOT_STOCK_INSUFFISANT`,
+ * `RATIONED_ARTICLE:ART-A:10`…) parce qu'ils sont testables et ne changent pas
+ * avec la langue. Mais un caissier n'a pas à lire ça: sans traduction il voit
+ * une chaîne en majuscules et appelle quelqu'un. Chaque code que le serveur
+ * peut lever a donc sa phrase ici.
+ *
+ * Certains codes portent un suffixe après « : » (le code article contingenté,
+ * l'état de chèque refusé). Il est extrait pour rendre le message précis.
+ */
+const ERREURS: Record<string, string> = {
+  VALIDATION_ERROR: 'Certains champs sont invalides ou manquants.',
+  FORBIDDEN: "Votre rôle ne permet pas cette opération.",
+  SESSION_EXPIRED: 'Session expirée, veuillez vous reconnecter.',
+  INTERNAL_SERVER_ERROR: 'Erreur serveur. Réessayez ou contactez un administrateur.',
+
+  // Stock
+  INSUFFICIENT_STOCK: "Stock insuffisant pour cette quantité (le stock déjà réservé par d'autres documents est décompté).",
+  STOCK_NOT_FOUND: "Cet article n'a pas de stock enregistré dans ce dépôt.",
+  RESERVATION_MISMATCH: "La réservation de stock ne correspond plus au document. Rouvrez-le et enregistrez-le à nouveau.",
+  ARTICLE_NOT_FOUND: 'Article introuvable.',
+
+  // Lots et péremption
+  LOT_REQUIS: 'Cet article est suivi par lot: indiquez un numéro de lot et une date de péremption.',
+  LOT_STOCK_INSUFFISANT:
+    "Pas assez de stock non périmé pour cette quantité. Les lots périmés ne sont jamais servis, même s'ils sont physiquement présents.",
+
+  // Documents
+  DOCUMENT_NOT_FOUND: 'Document introuvable.',
+  DOCUMENT_CANCELLED: 'Ce document est annulé.',
+  DOCUMENT_NOT_EDITABLE: "Seul un document ouvert peut être modifié ou supprimé.",
+  DOCUMENT_EXPIRE: "Ce bon de préparation est échu: sa réservation de stock a été libérée. Créez-en un nouveau.",
+  ONLY_VALIDATED_DOCUMENTS_CAN_BE_CANCELLED: 'Seul un document validé peut être annulé.',
+  PARTNER_REQUIRED_FOR_TYPE: 'Ce type de document exige un partenaire.',
+  PARTNER_NOT_FOUND: 'Partenaire introuvable.',
+  DEST_DEPOT_REQUIRED_FOR_TRANSFER: 'Un transfert exige un dépôt de destination.',
+  DEST_DEPOT_MUST_DIFFER_FROM_SOURCE: 'Le dépôt de destination doit être différent du dépôt de départ.',
+  DEST_DEPOT_NOT_FOUND: 'Dépôt de destination introuvable.',
+  LINE_QUANTITY_REQUIRED: 'Une ligne doit porter une quantité ou des unités gratuites.',
+
+  // Commandes et bons de livraison
+  NOT_A_COMMANDE: "Ce document n'est pas un bon de commande.",
+  COMMANDE_ALREADY_RECEIVED_OR_CANCELLED: 'Cette commande a déjà été réceptionnée ou annulée.',
+  NOT_A_BON_LIVRAISON: "Ce document n'est pas un bon de livraison.",
+  BON_LIVRAISON_NOT_VALIDATED: 'Le bon de livraison doit être validé avant de pouvoir être facturé.',
+  BON_LIVRAISON_ALREADY_INVOICED: 'Ce bon de livraison a déjà sa facture.',
+
+  // Régularisations
+  TYPE_REGULE_REQUIRED: 'Choisissez un type de régule: un écart de stock sans motif ne peut plus être expliqué ensuite.',
+  TYPE_REGULE_NOT_FOUND: 'Motif de régularisation introuvable.',
+
+  // Caisse et chèques
+  CASH_ENTRY_NOT_FOUND: 'Écriture de caisse introuvable.',
+  CASH_ENTRY_CANCELLED: 'Cette écriture est annulée: elle ne peut plus être validée.',
+  CASH_ENTRY_FROM_DOCUMENT:
+    "Cette écriture provient d'un document: annulez le document lui-même, sinon la facture resterait « réglée » alors que la caisse dit le contraire.",
+  CHEQUE_NOT_FOUND: 'Chèque introuvable.',
+
+  INVALID_DATE: 'Date invalide.'
+};
+
 export function describeError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
-  const known: Record<string, string> = {
-    VALIDATION_ERROR: 'Certains champs sont invalides ou manquants.',
-    FORBIDDEN: "Votre rôle ne permet pas cette opération.",
-    SESSION_EXPIRED: 'Session expirée, veuillez vous reconnecter.',
-    INTERNAL_SERVER_ERROR: 'Erreur serveur. Réessayez ou contactez un administrateur.'
-  };
-  if (known[raw]) return known[raw];
+
+  // Les codes à suffixe: on isole la racine et on réinjecte le détail.
+  const [code, ...details] = raw.split(':');
+  const detail = details.join(':').trim();
+
+  if (ERREURS[raw]) return ERREURS[raw];
+
+  switch (code) {
+    case 'RATIONED_ARTICLE': {
+      // RATIONED_ARTICLE:<code article>:<quantité max>
+      const [article, max] = details;
+      return `Article contingenté ${article ?? ''}: ${max ?? 'une quantité'} maximum par client et par document.`.trim();
+    }
+    case 'LOT_REQUIS':
+      return `${ERREURS.LOT_REQUIS}${detail ? ` (article ${detail})` : ''}`;
+    case 'TYPE_REGULE_INACTIF':
+      return `Le motif « ${detail} » n'est plus actif: choisissez-en un autre.`;
+    case 'TYPE_REGULE_MAUVAIS_SENS':
+      return `Le motif « ${detail} » ne s'emploie pas dans ce sens (une casse n'explique pas une entrée de stock).`;
+    case 'TRANSITION_INTERDITE':
+      return "Ce changement d'état n'est pas permis pour ce chèque.";
+    default:
+      break;
+  }
+
+  if (ERREURS[code]) return ERREURS[code];
   // Prisma unique-constraint violations surface as a bare message; make them readable.
   if (raw.includes('Unique constraint') || raw.includes('P2002')) return 'Ce code existe déjà. Choisissez un code unique.';
   return raw;

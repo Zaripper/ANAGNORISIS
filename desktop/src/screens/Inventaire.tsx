@@ -50,6 +50,39 @@ export function InventaireScreen({
 
   async function close() {
     if (touched.length === 0 || !effectiveDepot) return;
+
+    /**
+     * Une régularisation exige désormais un motif. Une clôture d'inventaire en
+     * est un par nature: on récupère « écart d'inventaire » dans la table de
+     * référence plutôt que de le coder en dur, pour qu'il reste modifiable.
+     */
+    let typeReguleId: string;
+    try {
+      const motifs = await apiRequest<{ id: string; code: string; sens: string; active: boolean }[]>('/types-regules');
+      const ecart = motifs.find((m) => m.code === 'ECART_INV' && m.active) ?? motifs.find((m) => m.sens === 'TOUS' && m.active);
+      if (!ecart) {
+        toasts.error("Aucun motif de régularisation « les deux sens » n'est actif: créez-en un dans Fichier > Types des régules.");
+        return;
+      }
+      typeReguleId = ecart.id;
+    } catch (err) {
+      toasts.error(describeError(err));
+      return;
+    }
+
+    /**
+     * Un article suivi par lot ne peut pas voir son stock augmenter sans qu'on
+     * dise DANS QUEL lot: la clôture ne peut pas le deviner. On refuse plutôt
+     * que de créer du stock qu'aucun lot ne couvre.
+     */
+    const plusAvecLot = plus.filter((r) => r.article.suiviLot);
+    if (plusAvecLot.length > 0) {
+      toasts.error(
+        `${plusAvecLot.map((r) => r.article.code).join(', ')}: article(s) suivi(s) par lot. Régularisez l'écart positif depuis Mouvement > Régules plus, où le n° de lot se saisit.`
+      );
+      return;
+    }
+
     setClosing(true);
     try {
       const refs: string[] = [];
@@ -62,6 +95,7 @@ export function InventaireScreen({
             depotId: effectiveDepot,
             paymentMode: 'ESPECE',
             remise: 0,
+            typeReguleId,
             motif: `Inventaire physique du ${new Date().toLocaleDateString('fr-FR')}`,
             lines: plus.map((r) => ({
               articleId: r.article.id,
@@ -85,6 +119,7 @@ export function InventaireScreen({
             depotId: effectiveDepot,
             paymentMode: 'ESPECE',
             remise: 0,
+            typeReguleId,
             motif: `Inventaire physique du ${new Date().toLocaleDateString('fr-FR')}`,
             lines: minus.map((r) => ({
               articleId: r.article.id,

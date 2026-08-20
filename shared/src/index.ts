@@ -15,7 +15,9 @@ export const documentTypes = [
   'REGULE_MOINS',
   'TRANSFERT'
 ] as const;
-export const documentStatuses = ['OUVERT', 'VALIDE', 'ANNULE'] as const;
+// EXPIRE inclus: un bon de preparation echu porte cet etat en base. L'omettre
+// ici donnerait un type qui exclut silencieusement un etat pourtant stocke.
+export const documentStatuses = ['OUVERT', 'VALIDE', 'ANNULE', 'EXPIRE'] as const;
 export const paymentModes = ['ESPECE', 'CHEQUE', 'TRAITE', 'VIREMENT'] as const;
 export const cashTxTypes = ['RECETTE', 'DEPENSE'] as const;
 export const pricePolicies = ['PRIX_SAISI', 'TAUX'] as const;

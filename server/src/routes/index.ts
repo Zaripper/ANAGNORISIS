@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ZodError } from 'zod';
 import bcrypt from 'bcryptjs';
 import { cancelCashEntry, createCashEntry, validateCashEntry } from '../services/caisse.service';
 import { alerteJours, listerLots, valeurLotsPerimes } from '../services/lot.service';
@@ -62,7 +63,32 @@ import { requireAuth, requireRole, signToken } from '../middleware/auth';
 
 export const api = Router();
 
+/**
+ * Reponse d'erreur.
+ *
+ * Les erreurs de validation Zod sont traitees a part: `ZodError.message` est le
+ * tableau des problemes serialise en JSON, et le renvoyer tel quel affichait un
+ * pave de JSON a l'ecran. Pire, les regles metier exprimees en `superRefine`
+ * (PARTNER_REQUIRED_FOR_TYPE, TYPE_REGULE_REQUIRED, LINE_QUANTITY_REQUIRED)
+ * passent par ce chemin: noyees dans le JSON, elles n'arrivaient jamais au
+ * client sous forme de code exploitable. On remonte donc le premier message
+ * personnalise s'il existe, et VALIDATION_ERROR sinon.
+ */
 function handleError(res: any, error: unknown) {
+  if (error instanceof ZodError) {
+    // Le code metier n'est remonte que si TOUS les problemes en sont: quand la
+    // saisie est aussi mal formee (uuid invalide, lignes absentes), c'est cela
+    // qu'il faut signaler d'abord — annoncer "partenaire obligatoire" sur un
+    // corps de requete casse enverrait l'utilisateur corriger le mauvais champ.
+    const tousMetier = error.issues.every((i) => i.code === 'custom' && /^[A-Z_]+$/.test(i.message));
+    const custom = tousMetier ? error.issues[0] : undefined;
+    const champs = error.issues.map((i) => i.path.join('.')).filter(Boolean);
+    return res.status(400).json({
+      message: custom ? custom.message : 'VALIDATION_ERROR',
+      fields: [...new Set(champs)]
+    });
+  }
+
   const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
   const status = message.endsWith('_NOT_FOUND') ? 404 : 400;
   res.status(status).json({ message });

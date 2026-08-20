@@ -836,6 +836,10 @@ interface SimpleMovementLine {
   designation: string;
   qte: number;
   pump: number;
+  /** Vrai si l'article exige un lot: la ligne demande alors n° et péremption. */
+  suiviLot: boolean;
+  numeroLot: string;
+  datePeremption: string;
 }
 
 function RegulesScreen({
@@ -890,7 +894,19 @@ function RegulesScreen({
         next[existing] = { ...next[existing], qte: next[existing].qte + 1 };
         return next;
       }
-      return [...prev, { articleId: art.id, code: art.code, designation: art.designation, qte: 1, pump: art.pump }];
+      return [
+        ...prev,
+        {
+          articleId: art.id,
+          code: art.code,
+          designation: art.designation,
+          qte: 1,
+          pump: art.pump,
+          suiviLot: Boolean(art.suiviLot),
+          numeroLot: '',
+          datePeremption: ''
+        }
+      ];
     });
     setShowArticleModal(false);
   }
@@ -912,6 +928,15 @@ function RegulesScreen({
       setNotice("Choisissez un type de régule: un écart de stock sans motif n'est plus explicable après coup.");
       return;
     }
+    // Une entrée sur un article suivi doit dire DANS QUEL lot elle entre: sans
+    // cela on créerait du stock qu'aucun lot ne couvre.
+    if (isPlus) {
+      const incomplet = lines.find((l) => l.suiviLot && (!l.numeroLot.trim() || !l.datePeremption));
+      if (incomplet) {
+        setNotice(`${incomplet.code} est suivi par lot: indiquez son n° de lot et sa date de péremption.`);
+        return;
+      }
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -930,7 +955,11 @@ function RegulesScreen({
             quantity: l.qte,
             unitPriceHT: l.pump,
             discountPercent: 0,
-            tvaRate: 0
+            tvaRate: 0,
+            // En sortie, les lots sont choisis par le serveur (au plus proche de
+            // la péremption): la saisie ne sert qu'aux entrées.
+            numeroLot: isPlus && l.suiviLot ? l.numeroLot.trim() : null,
+            datePeremption: isPlus && l.suiviLot && l.datePeremption ? new Date(l.datePeremption).toISOString() : null
           }))
         }
       });
@@ -1031,6 +1060,7 @@ function RegulesScreen({
               <th className="p-3">Code</th>
               <th className="p-3">Désignation</th>
               <th className="p-3 text-center">Quantité</th>
+              {isPlus && <th className="p-3 text-center w-56">Lot / péremption</th>}
               <th className="p-3 text-right">P.U.M.P.</th>
               <th className="p-3 text-center w-12"></th>
             </tr>
@@ -1049,6 +1079,39 @@ function RegulesScreen({
                     className="w-16 text-center border border-slate-200 rounded-lg font-bold font-mono py-1 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
                   />
                 </td>
+                {isPlus && (
+                  <td className="p-3">
+                    {l.suiviLot ? (
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={l.numeroLot}
+                          placeholder="N° lot"
+                          onChange={(e) =>
+                            setLines((prev) =>
+                              prev.map((x) => (x.articleId === l.articleId ? { ...x, numeroLot: e.target.value } : x))
+                            )
+                          }
+                          className="w-24 border border-slate-200 rounded-lg font-mono text-[11px] py-1 px-1.5 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                          aria-label={`Numéro de lot pour ${l.code}`}
+                        />
+                        <input
+                          type="date"
+                          value={l.datePeremption}
+                          onChange={(e) =>
+                            setLines((prev) =>
+                              prev.map((x) => (x.articleId === l.articleId ? { ...x, datePeremption: e.target.value } : x))
+                            )
+                          }
+                          className="w-28 border border-slate-200 rounded-lg text-[11px] py-1 px-1.5 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                          aria-label={`Date de péremption pour ${l.code}`}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 text-[11px]">—</span>
+                    )}
+                  </td>
+                )}
                 <td className="p-3 text-right font-mono text-slate-400">{l.pump.toFixed(2)}</td>
                 <td className="p-3 text-center">
                   <button onClick={() => removeLine(l.articleId)} className="text-slate-300 hover:text-rose-600 font-bold p-1 transition">
@@ -1125,7 +1188,19 @@ function TransfertScreen({
         next[existing] = { ...next[existing], qte: next[existing].qte + 1 };
         return next;
       }
-      return [...prev, { articleId: art.id, code: art.code, designation: art.designation, qte: 1, pump: art.pump }];
+      return [
+        ...prev,
+        {
+          articleId: art.id,
+          code: art.code,
+          designation: art.designation,
+          qte: 1,
+          pump: art.pump,
+          suiviLot: Boolean(art.suiviLot),
+          numeroLot: '',
+          datePeremption: ''
+        }
+      ];
     });
     setShowArticleModal(false);
   }

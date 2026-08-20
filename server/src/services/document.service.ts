@@ -526,6 +526,59 @@ async function reserverLotsDuDocument(
   }
 }
 
+/**
+ * Deplace des lots vers un autre depot en conservant leur identite (numero et
+ * peremption).
+ *
+ * `depotSource` permet de rejouer l'operation a l'envers lors d'une annulation:
+ * on retire alors du depot d'arrivee pour rendre au depot de depart.
+ */
+async function deplacerLotsVersDepot(
+  tx: Tx,
+  allocations: { lotId: string; quantity: number }[],
+  depotDestination: string,
+  depotSource?: string
+) {
+  for (const a of allocations) {
+    const lot = await tx.lot.findUnique({ where: { id: a.lotId } });
+    if (!lot) continue;
+
+    if (depotSource) {
+      // Annulation: le lot d'origine reprend sa quantite, celui du depot
+      // d'arrivee la perd.
+      const arrivee = await tx.lot.findUnique({
+        where: {
+          articleId_depotId_numeroLot_datePeremption: {
+            articleId: lot.articleId,
+            depotId: depotDestination === lot.depotId ? depotSource : depotDestination,
+            numeroLot: lot.numeroLot,
+            datePeremption: lot.datePeremption
+          }
+        }
+      });
+      if (arrivee) {
+        await tx.lot.update({ where: { id: arrivee.id }, data: { qtyInStock: { decrement: a.quantity } } });
+      }
+      await tx.lot.update({ where: { id: a.lotId }, data: { qtyInStock: { increment: a.quantity } } });
+      continue;
+    }
+
+    // Transfert: la reservation tombe et la quantite quitte le lot source pour
+    // un lot de meme identite dans le depot d'arrivee.
+    await tx.lot.update({
+      where: { id: a.lotId },
+      data: { qtyReserved: { decrement: a.quantity }, qtyInStock: { decrement: a.quantity } }
+    });
+    await entrerEnLot(tx, {
+      articleId: lot.articleId,
+      depotId: depotDestination,
+      numeroLot: lot.numeroLot,
+      datePeremption: lot.datePeremption,
+      quantity: a.quantity
+    });
+  }
+}
+
 /** Libere les lots reserves par un document et efface la repartition. */
 async function libererLotsDuDocument(tx: Tx, documentId: string) {
   const allocations = await tx.documentLineLot.findMany({ where: { documentLine: { documentId } } });
@@ -681,6 +734,20 @@ export async function validateDocument(documentId: string, validatedById?: strin
           create: { articleId: line.articleId, depotId: document.destDepotId, qtyInStock: sortant },
           update: { qtyInStock: { increment: sortant } }
         });
+
+        /**
+         * Les lots suivent la marchandise. Sans cela le depot source affirmerait
+         * avoir expedie les articles tandis que ses lots les montreraient
+         * toujours presents, et le depot d'arrivee aurait du stock qu'aucun lot
+         * ne couvre: le total et sa ventilation divergent des le premier
+         * transfert. Le numero de lot et la peremption sont conserves — c'est ce
+         * qui rend un rappel de lot encore possible apres un transfert.
+         */
+        await deplacerLotsVersDepot(
+          tx,
+          allocationsParLigne.filter((a) => a.documentLineId === line.id),
+          document.destDepotId
+        );
       } else if (isReceiving(type)) {
         if (recalculatesPump(type)) {
           // True purchases: increase physical stock and recompute the weighted-average
@@ -867,6 +934,14 @@ export async function cancelDocument(documentId: string) {
           where: { articleId_depotId: { articleId: line.articleId, depotId: document.destDepotId } },
           data: { qtyInStock: { decrement: sortant } }
         });
+
+        // Symetrique du transfert: les lots repartent d'ou ils venaient.
+        await deplacerLotsVersDepot(
+          tx,
+          allocationsAnnulees.filter((a) => a.documentLineId === line.id),
+          line.depotId,
+          document.destDepotId
+        );
         continue;
       }
 
@@ -979,7 +1054,11 @@ export async function receiveCommande(commandeId: string, receivedById?: string)
         nbColis: l.nbColis,
         numeroColis: l.numeroColis,
         quantiteBonus: l.quantiteBonus,
-        ristourne: Number(l.ristourne)
+        ristourne: Number(l.ristourne),
+        // Sans reprise du lot, un article suivi devient impossible a recevoir:
+        // l'ACHAT genere exige un lot que la commande ne lui transmettrait pas.
+        numeroLot: l.numeroLot,
+        datePeremption: l.datePeremption ? l.datePeremption.toISOString() : null
       }))
     },
     receivedById
@@ -1037,6 +1116,9 @@ export async function factureFromBonLivraison(blId: string, createdById?: string
         marginPercent: bl.marginPercent,
         createdById: createdById ?? null,
         lines: {
+          // La facture reprend les totaux du BL: ses lignes doivent donc etre
+          // identiques, UG et ristourne comprises. Amputees, elles afficheraient
+          // des lignes qui ne font pas la somme annoncee en pied de facture.
           create: bl.lines.map((l) => ({
             articleId: l.articleId,
             depotId: l.depotId,
@@ -1046,7 +1128,14 @@ export async function factureFromBonLivraison(blId: string, createdById?: string
             tvaRate: l.tvaRate,
             totalHT: l.totalHT,
             totalTTC: l.totalTTC,
-            purchaseCostPUMP: l.purchaseCostPUMP
+            purchaseCostPUMP: l.purchaseCostPUMP,
+            emballage: l.emballage,
+            nbColis: l.nbColis,
+            numeroColis: l.numeroColis,
+            quantiteBonus: l.quantiteBonus,
+            ristourne: l.ristourne,
+            numeroLot: l.numeroLot,
+            datePeremption: l.datePeremption
           }))
         }
       },
