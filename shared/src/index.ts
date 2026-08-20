@@ -135,6 +135,7 @@ export function fiscalStamp(preStampTotalTTC: number, paymentMode: PaymentMode):
 }
 
 export interface TotalsLine {
+  /** Quantité facturée. Le bonus s'y ajoute au stock mais jamais au prix. */
   quantity: number;
   unitPriceHT: number;
   /** Per-line discount in percent (0-100). */
@@ -142,6 +143,53 @@ export interface TotalsLine {
   tvaRate: number;
   /** Weighted-average cost snapshot used for the margin figures. */
   purchaseCostPUMP: number;
+  /**
+   * Quantité offerte (« bonus »). Elle sort du stock comme le reste mais ne se
+   * facture pas: c'est de la marchandise donnée. Son coût pèse donc en entier
+   * sur la marge, sans contrepartie de chiffre d'affaires.
+   */
+  quantiteBonus?: number;
+  /**
+   * Ristourne en valeur sur la ligne, appliquée APRÈS la remise en pourcentage.
+   * Les deux coexistent dans le logiciel actuel: la remise est un taux négocié
+   * par catégorie, la ristourne un geste ponctuel en dinars.
+   */
+  ristourne?: number;
+}
+
+/**
+ * Montant HT d'une ligne: remise en pourcentage puis ristourne en valeur.
+ *
+ * Une ristourne supérieure au montant remisé ramènerait la ligne en négatif —
+ * ce serait une facture qui rembourse le client. On plafonne à zéro plutôt que
+ * de laisser passer une ligne négative dans la TVA et le CA.
+ */
+export function lineTotalHT(line: TotalsLine): number {
+  const apresRemise = line.quantity * line.unitPriceHT * (1 - line.discountPercent / 100);
+  return Math.max(0, apresRemise - (line.ristourne ?? 0));
+}
+
+/** Quantité réellement sortie du stock: facturée + offerte. */
+export function lineStockQuantity(line: Pick<TotalsLine, 'quantity' | 'quantiteBonus'>): number {
+  return line.quantity + (line.quantiteBonus ?? 0);
+}
+
+// ---------- Emballage (colisage / vrac) ----------
+export const emballages = ['VRAC', 'COLISAGE'] as const;
+export type Emballage = (typeof emballages)[number];
+
+/**
+ * Le gros se vend au colis, le détail à l'unité. En colisage l'opérateur saisit
+ * un nombre de colis et la quantité en découle du colisage de l'article — c'est
+ * ainsi que le logiciel actuel évite les erreurs de comptage sur des commandes
+ * de plusieurs centaines d'unités.
+ *
+ * Le stock, lui, reste toujours compté en unités: un colisage nul ou absent
+ * ferait disparaître la marchandise du stock, donc on retombe sur 1.
+ */
+export function quantiteDepuisColis(nbColis: number, colisage: number | null | undefined): number {
+  const parColis = colisage && colisage > 0 ? colisage : 1;
+  return Math.max(0, Math.trunc(nbColis)) * parColis;
 }
 
 export interface DocTotals {
@@ -158,10 +206,12 @@ export function computeDocTotals(lines: TotalsLine[], remise: number, paymentMod
   let totalTVA = 0;
   let purchaseTotal = 0;
   for (const l of lines) {
-    const lineHT = l.quantity * l.unitPriceHT * (1 - l.discountPercent / 100);
+    const lineHT = lineTotalHT(l);
     totalHT += lineHT;
     totalTVA += lineHT * (l.tvaRate / 100);
-    purchaseTotal += l.quantity * l.purchaseCostPUMP;
+    // Le coût porte sur TOUT ce qui sort, bonus compris: la marchandise offerte
+    // a été payée au fournisseur. L'ignorer surestimerait la marge d'autant.
+    purchaseTotal += lineStockQuantity(l) * l.purchaseCostPUMP;
   }
   const preStampTTC = totalHT - remise + totalTVA;
   const stampDuty = fiscalStamp(preStampTTC, paymentMode);
@@ -500,14 +550,31 @@ export const updateDepotSchema = createDepotSchema.partial();
 export type UpdateDepotInput = z.infer<typeof updateDepotSchema>;
 
 // ---------- Documents ----------
-export const documentLineInputSchema = z.object({
-  articleId: z.string().uuid(),
-  depotId: z.string().uuid(),
-  quantity: z.number().int().positive(),
-  unitPriceHT: z.number().nonnegative(),
-  discountPercent: z.number().min(0).max(100).default(0),
-  tvaRate: z.number().nonnegative().default(19)
-});
+export const documentLineInputSchema = z
+  .object({
+    articleId: z.string().uuid(),
+    depotId: z.string().uuid(),
+    /**
+     * Quantite facturee, en unites. Elle peut valoir 0 sur une ligne purement
+     * bonus (marchandise offerte sans contrepartie), d'ou le `nonnegative`.
+     */
+    quantity: z.number().int().nonnegative(),
+    unitPriceHT: z.number().nonnegative(),
+    discountPercent: z.number().min(0).max(100).default(0),
+    tvaRate: z.number().nonnegative().default(19),
+    emballage: z.enum(emballages).default('VRAC'),
+    nbColis: z.number().int().nonnegative().optional().nullable(),
+    numeroColis: z.string().max(60).optional().nullable(),
+    quantiteBonus: z.number().int().nonnegative().default(0),
+    ristourne: z.number().nonnegative().default(0)
+  })
+  .superRefine((line, ctx) => {
+    // Une ligne sans quantite ni bonus ne sort rien du stock et ne facture
+    // rien: c'est une ligne vide oubliee dans la saisie.
+    if (line.quantity === 0 && line.quantiteBonus === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quantity'], message: 'LINE_QUANTITY_REQUIRED' });
+    }
+  });
 export type DocumentLineInput = z.infer<typeof documentLineInputSchema>;
 
 export const createDocumentSchema = z

@@ -8,6 +8,7 @@ import {
   ledgerEffect,
   partnerRequiredTypes,
   pumpRecalculatingTypes,
+  quantiteDepuisColis,
   stockConsumingTypes,
   stockReceivingTypes,
   type DocumentType,
@@ -179,6 +180,89 @@ describe('computeDocTotals', () => {
     expect(totals.totalHT).toBe(0);
     expect(totals.marginPercent).toBe(0);
     expect(totals.stampDuty).toBe(0);
+  });
+});
+
+describe('bonus et ristourne', () => {
+  it("le bonus ne se facture pas mais son coût ampute la marge", () => {
+    // 10 payés + 2 offerts, achetés 700 l'unité, vendus 1000.
+    const totals = computeDocTotals(
+      [line({ quantity: 10, unitPriceHT: 1000, tvaRate: 0, purchaseCostPUMP: 700, quantiteBonus: 2 })],
+      0,
+      'CHEQUE'
+    );
+
+    // Le client paie 10 unités, pas 12.
+    expect(totals.totalHT).toBe(10000);
+    // Mais 12 unités ont été achetées: 12 × 700 = 8400.
+    expect(totals.marginHT).toBe(1600);
+    // Sans prise en compte du bonus la marge afficherait 3000 — soit près du
+    // double. C'est exactement l'erreur qui fait vendre à perte sans le voir.
+    expect(totals.marginHT).toBeLessThan(3000);
+  });
+
+  it('un bonus sans vente donne une marge négative égale au coût donné', () => {
+    const totals = computeDocTotals(
+      [line({ quantity: 0, unitPriceHT: 1000, tvaRate: 0, purchaseCostPUMP: 700, quantiteBonus: 3 })],
+      0,
+      'CHEQUE'
+    );
+    expect(totals.totalHT).toBe(0);
+    expect(totals.marginHT).toBe(-2100);
+  });
+
+  it('la ristourne se retranche après la remise, et réduit la TVA', () => {
+    const totals = computeDocTotals(
+      [line({ quantity: 1, unitPriceHT: 1000, discountPercent: 10, tvaRate: 19, ristourne: 100 })],
+      0,
+      'CHEQUE'
+    );
+    // 1000 → -10 % = 900 → -100 de ristourne = 800
+    expect(totals.totalHT).toBeCloseTo(800, 6);
+    expect(totals.totalTVA).toBeCloseTo(152, 6);
+  });
+
+  it('une ristourne excessive ne rend pas la ligne négative', () => {
+    // Une ligne négative rembourserait le client au milieu d'une facture, et
+    // fausserait la TVA collectée.
+    const totals = computeDocTotals(
+      [line({ quantity: 1, unitPriceHT: 100, tvaRate: 19, ristourne: 500 })],
+      0,
+      'CHEQUE'
+    );
+    expect(totals.totalHT).toBe(0);
+    expect(totals.totalTVA).toBe(0);
+  });
+
+  it('bonus et ristourne sont sans effet quand ils ne sont pas renseignés', () => {
+    // Les documents existants n'ont ni l'un ni l'autre: leurs totaux ne doivent
+    // pas bouger d'un centime.
+    const avec = computeDocTotals([line({ quantity: 2, unitPriceHT: 500, tvaRate: 19, purchaseCostPUMP: 300 })], 0, 'ESPECE');
+    const explicite = computeDocTotals(
+      [line({ quantity: 2, unitPriceHT: 500, tvaRate: 19, purchaseCostPUMP: 300, quantiteBonus: 0, ristourne: 0 })],
+      0,
+      'ESPECE'
+    );
+    expect(avec).toEqual(explicite);
+  });
+});
+
+describe('quantiteDepuisColis', () => {
+  it('multiplie le nombre de colis par le colisage de l’article', () => {
+    expect(quantiteDepuisColis(3, 12)).toBe(36);
+  });
+
+  it('retombe sur 1 unité par colis quand le colisage est absent ou nul', () => {
+    // Sinon la marchandise sortirait du stock en quantité nulle: on livrerait
+    // sans jamais décrémenter.
+    expect(quantiteDepuisColis(5, null)).toBe(5);
+    expect(quantiteDepuisColis(5, 0)).toBe(5);
+    expect(quantiteDepuisColis(5, undefined)).toBe(5);
+  });
+
+  it('ignore un nombre de colis négatif ou fractionnaire', () => {
+    expect(quantiteDepuisColis(-2, 10)).toBe(0);
+    expect(quantiteDepuisColis(2.7, 10)).toBe(20);
   });
 });
 

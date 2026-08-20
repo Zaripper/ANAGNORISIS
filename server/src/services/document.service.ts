@@ -10,6 +10,10 @@ import {
   stockReceivingTypes,
   pumpRecalculatingTypes,
   ledgerEffect,
+  lineStockQuantity,
+  lineTotalHT,
+  quantiteDepuisColis,
+  type Emballage,
   BP_DUREE_VALIDITE_KEY,
   dateValiditeBP,
   parseDureeValiditeBP
@@ -93,6 +97,7 @@ const TX_OPTIONS = { maxWait: 15000, timeout: 30000 } as const;
 interface ComputedLine {
   articleId: string;
   depotId: string;
+  /** Quantite FACTUREE. Ne jamais s'en servir pour bouger du stock — voir qtyStock. */
   quantity: number;
   unitPriceHT: number;
   discountPercent: number;
@@ -100,6 +105,64 @@ interface ComputedLine {
   totalHT: number;
   totalTTC: number;
   purchaseCostPUMP: number;
+  emballage: Emballage;
+  nbColis: number | null;
+  numeroColis: string | null;
+  quantiteBonus: number;
+  ristourne: number;
+}
+
+/**
+ * Quantite qui bouge physiquement: facturee + offerte.
+ *
+ * C'est LA distinction du module. `quantity` est une grandeur monetaire (ce que
+ * le client paie), `qtyStock` une grandeur physique (ce qui sort de l'entrepot).
+ * Les confondre fait soit disparaitre la marchandise offerte des stocks, soit
+ * la facturer au client.
+ */
+function qtyStock(line: Pick<ComputedLine, 'quantity' | 'quantiteBonus'>): number {
+  return lineStockQuantity(line);
+}
+
+/**
+ * Convertit une ligne stockee (Decimal cote Prisma) en ligne de calcul.
+ *
+ * Centralise parce que cette conversion etait recopiee a cinq endroits: a
+ * chaque nouveau champ de ligne, en oublier un seul suffisait a le perdre
+ * silencieusement lors d'une annulation ou d'une refacturation.
+ */
+function toComputedLine(l: {
+  articleId: string;
+  depotId: string;
+  quantity: number;
+  unitPriceHT: Prisma.Decimal | number;
+  discountPercent: Prisma.Decimal | number;
+  tvaRate: Prisma.Decimal | number;
+  totalHT: Prisma.Decimal | number;
+  totalTTC: Prisma.Decimal | number;
+  purchaseCostPUMP: Prisma.Decimal | number;
+  emballage: Emballage;
+  nbColis: number | null;
+  numeroColis: string | null;
+  quantiteBonus: number;
+  ristourne: Prisma.Decimal | number;
+}): ComputedLine {
+  return {
+    articleId: l.articleId,
+    depotId: l.depotId,
+    quantity: l.quantity,
+    unitPriceHT: Number(l.unitPriceHT),
+    discountPercent: Number(l.discountPercent),
+    tvaRate: Number(l.tvaRate),
+    totalHT: Number(l.totalHT),
+    totalTTC: Number(l.totalTTC),
+    purchaseCostPUMP: Number(l.purchaseCostPUMP),
+    emballage: l.emballage,
+    nbColis: l.nbColis,
+    numeroColis: l.numeroColis,
+    quantiteBonus: l.quantiteBonus,
+    ristourne: Number(l.ristourne)
+  };
 }
 
 async function computeLines(tx: Tx, lines: CreateDocumentInput['lines']): Promise<ComputedLine[]> {
@@ -108,20 +171,38 @@ async function computeLines(tx: Tx, lines: CreateDocumentInput['lines']): Promis
     const article = await tx.article.findUnique({ where: { id: line.articleId } });
     if (!article) throw new Error('ARTICLE_NOT_FOUND');
 
-    const totalHT = line.quantity * line.unitPriceHT * (1 - line.discountPercent / 100);
+    // En colisage la quantite est deduite du colisage de l'article et non de la
+    // saisie: c'est le serveur qui fait foi, sinon un poste mal configure
+    // pourrait facturer un nombre d'unites sans rapport avec ce qui part.
+    const quantity =
+      line.emballage === 'COLISAGE' ? quantiteDepuisColis(line.nbColis ?? 0, article.colisage) : line.quantity;
+
+    const totalHT = lineTotalHT({
+      quantity,
+      unitPriceHT: line.unitPriceHT,
+      discountPercent: line.discountPercent,
+      tvaRate: line.tvaRate,
+      purchaseCostPUMP: 0,
+      ristourne: line.ristourne
+    });
     const totalTVA = totalHT * (line.tvaRate / 100);
     const totalTTC = totalHT + totalTVA;
 
     result.push({
       articleId: line.articleId,
       depotId: line.depotId,
-      quantity: line.quantity,
+      quantity,
       unitPriceHT: line.unitPriceHT,
       discountPercent: line.discountPercent,
       tvaRate: line.tvaRate,
       totalHT,
       totalTTC,
-      purchaseCostPUMP: Number(article.pump) // cost basis snapshot; refreshed again at validation
+      purchaseCostPUMP: Number(article.pump), // cost basis snapshot; refreshed again at validation
+      emballage: line.emballage,
+      nbColis: line.nbColis ?? null,
+      numeroColis: line.numeroColis ?? null,
+      quantiteBonus: line.quantiteBonus,
+      ristourne: line.ristourne
     });
   }
   return result;
@@ -161,14 +242,18 @@ async function adjustReservations(tx: Tx, type: DocumentType, lines: ComputedLin
     });
     if (!stock) throw new Error('STOCK_NOT_FOUND');
 
+    // Le bonus part avec le reste: il doit etre reserve, sinon on promettrait
+    // au client une marchandise offerte deja vendue a quelqu'un d'autre.
+    const sortant = qtyStock(line);
+
     if (sign === 1) {
       const available = stock.qtyInStock - stock.qtyReserved;
-      if (available < line.quantity) throw new Error('INSUFFICIENT_STOCK');
+      if (available < sortant) throw new Error('INSUFFICIENT_STOCK');
     }
 
     await tx.articleStock.update({
       where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-      data: { qtyReserved: { increment: sign * line.quantity } }
+      data: { qtyReserved: { increment: sign * sortant } }
     });
   }
 }
@@ -186,7 +271,9 @@ async function enforceRationing(tx: Tx, type: DocumentType, lines: CreateDocumen
   if (!isConsuming(type)) return;
   const byArticle = new Map<string, number>();
   for (const line of lines) {
-    byArticle.set(line.articleId, (byArticle.get(line.articleId) ?? 0) + line.quantity);
+    // Bonus inclus: sans cela un client contournerait le contingentement en se
+    // faisant "offrir" les unites au-dela du plafond.
+    byArticle.set(line.articleId, (byArticle.get(line.articleId) ?? 0) + line.quantity + (line.quantiteBonus ?? 0));
   }
   for (const [articleId, quantity] of byArticle) {
     const article = await tx.article.findUnique({ where: { id: articleId } });
@@ -261,17 +348,7 @@ export async function libererBonPreparation(documentId: string, now: Date = new 
     await adjustReservations(
       tx,
       document.type as DocumentType,
-      document.lines.map((l) => ({
-        articleId: l.articleId,
-        depotId: l.depotId,
-        quantity: l.quantity,
-        unitPriceHT: Number(l.unitPriceHT),
-        discountPercent: Number(l.discountPercent),
-        tvaRate: Number(l.tvaRate),
-        totalHT: Number(l.totalHT),
-        totalTTC: Number(l.totalTTC),
-        purchaseCostPUMP: Number(l.purchaseCostPUMP)
-      })),
+      document.lines.map(toComputedLine),
       -1
     );
 
@@ -359,17 +436,7 @@ export async function updateDraftDocument(documentId: string, input: UpdateDocum
     if (!existing) throw new Error('DOCUMENT_NOT_FOUND');
     if (existing.status !== 'OUVERT') throw new Error('DOCUMENT_NOT_EDITABLE');
 
-    const oldComputed: ComputedLine[] = existing.lines.map((l) => ({
-      articleId: l.articleId,
-      depotId: l.depotId,
-      quantity: l.quantity,
-      unitPriceHT: Number(l.unitPriceHT),
-      discountPercent: Number(l.discountPercent),
-      tvaRate: Number(l.tvaRate),
-      totalHT: Number(l.totalHT),
-      totalTTC: Number(l.totalTTC),
-      purchaseCostPUMP: Number(l.purchaseCostPUMP)
-    }));
+    const oldComputed: ComputedLine[] = existing.lines.map(toComputedLine);
     await adjustReservations(tx, existing.type as DocumentType, oldComputed, -1);
     await tx.documentLine.deleteMany({ where: { documentId } });
 
@@ -418,17 +485,7 @@ export async function deleteDraftDocument(documentId: string) {
     if (!existing) throw new Error('DOCUMENT_NOT_FOUND');
     if (existing.status !== 'OUVERT') throw new Error('DOCUMENT_NOT_EDITABLE');
 
-    const computed: ComputedLine[] = existing.lines.map((l) => ({
-      articleId: l.articleId,
-      depotId: l.depotId,
-      quantity: l.quantity,
-      unitPriceHT: Number(l.unitPriceHT),
-      discountPercent: Number(l.discountPercent),
-      tvaRate: Number(l.tvaRate),
-      totalHT: Number(l.totalHT),
-      totalTTC: Number(l.totalTTC),
-      purchaseCostPUMP: Number(l.purchaseCostPUMP)
-    }));
+    const computed: ComputedLine[] = existing.lines.map(toComputedLine);
     await adjustReservations(tx, existing.type as DocumentType, computed, -1);
     await tx.document.delete({ where: { id: documentId } });
     return { id: documentId, deleted: true };
@@ -484,22 +541,26 @@ export async function validateDocument(documentId: string, validatedById?: strin
       const article = await tx.article.findUnique({ where: { id: line.articleId } });
       if (!article) throw new Error('ARTICLE_NOT_FOUND');
 
+      // Tout ce qui suit bouge du stock: on raisonne en quantite sortante
+      // (facturee + offerte), jamais en quantite facturee.
+      const sortant = qtyStock(line);
+
       if (isTransfer(type)) {
         // Inter-depot transfer: release the source-depot reservation, decrement
         // source physical stock, and increment (or create) the destination depot's
         // stock row for the same article. No PUMP change — the goods never left the
         // company, so their cost basis doesn't change.
         if (!document.destDepotId) throw new Error('DEST_DEPOT_REQUIRED_FOR_TRANSFER');
-        if (stock.qtyReserved < line.quantity) throw new Error('RESERVATION_MISMATCH');
+        if (stock.qtyReserved < sortant) throw new Error('RESERVATION_MISMATCH');
 
         await tx.articleStock.update({
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-          data: { qtyReserved: { decrement: line.quantity }, qtyInStock: { decrement: line.quantity } }
+          data: { qtyReserved: { decrement: sortant }, qtyInStock: { decrement: sortant } }
         });
         await tx.articleStock.upsert({
           where: { articleId_depotId: { articleId: line.articleId, depotId: document.destDepotId } },
-          create: { articleId: line.articleId, depotId: document.destDepotId, qtyInStock: line.quantity },
-          update: { qtyInStock: { increment: line.quantity } }
+          create: { articleId: line.articleId, depotId: document.destDepotId, qtyInStock: sortant },
+          update: { qtyInStock: { increment: sortant } }
         });
       } else if (isReceiving(type)) {
         if (recalculatesPump(type)) {
@@ -508,12 +569,22 @@ export async function validateDocument(documentId: string, validatedById?: strin
           const oldQty = stock.qtyInStock;
           const oldPump = Number(article.pump);
           const incomingCost = Number(line.unitPriceHT);
-          const newPump =
-            oldQty + line.quantity > 0 ? (oldQty * oldPump + line.quantity * incomingCost) / (oldQty + line.quantity) : incomingCost;
+
+          /**
+           * Le bonus fournisseur entre en stock sans avoir ete paye: la valeur
+           * acquise porte sur les unites FACTUREES, la quantite acquise sur les
+           * unites RECUES. Un carton offert sur dix achetes baisse donc le
+           * P.U.M.P d'environ 9 %, ce qui est exactement l'effet economique
+           * recherche. Prendre `sortant` au numerateur reviendrait a payer le
+           * cadeau; prendre `line.quantity` au denominateur reviendrait a
+           * l'ignorer.
+           */
+          const valeurEntrante = line.quantity * incomingCost;
+          const newPump = oldQty + sortant > 0 ? (oldQty * oldPump + valeurEntrante) / (oldQty + sortant) : incomingCost;
 
           await tx.articleStock.update({
             where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-            data: { qtyInStock: { increment: line.quantity } }
+            data: { qtyInStock: { increment: sortant } }
           });
           await tx.article.update({ where: { id: line.articleId }, data: { pump: newPump } });
           await tx.documentLine.update({ where: { id: line.id }, data: { purchaseCostPUMP: incomingCost } });
@@ -523,18 +594,18 @@ export async function validateDocument(documentId: string, validatedById?: strin
           // basis (P.U.M.P) must not move.
           await tx.articleStock.update({
             where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-            data: { qtyInStock: { increment: line.quantity } }
+            data: { qtyInStock: { increment: sortant } }
           });
         }
       } else if (isConsuming(type)) {
         // Sales, prep slips, avoir achat (return to supplier), régule moins: release
         // the draft-time reservation and decrement physical stock exactly once.
         // Snapshot P.U.M.P at validation for margin/valuation reporting.
-        if (stock.qtyReserved < line.quantity) throw new Error('RESERVATION_MISMATCH');
+        if (stock.qtyReserved < sortant) throw new Error('RESERVATION_MISMATCH');
 
         await tx.articleStock.update({
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-          data: { qtyReserved: { decrement: line.quantity }, qtyInStock: { decrement: line.quantity } }
+          data: { qtyReserved: { decrement: sortant }, qtyInStock: { decrement: sortant } }
         });
         await tx.documentLine.update({ where: { id: line.id }, data: { purchaseCostPUMP: Number(article.pump) } });
       }
@@ -542,17 +613,7 @@ export async function validateDocument(documentId: string, validatedById?: strin
     }
 
     const refreshedLines = await tx.documentLine.findMany({ where: { documentId } });
-    const computed: ComputedLine[] = refreshedLines.map((l) => ({
-      articleId: l.articleId,
-      depotId: l.depotId,
-      quantity: l.quantity,
-      unitPriceHT: Number(l.unitPriceHT),
-      discountPercent: Number(l.discountPercent),
-      tvaRate: Number(l.tvaRate),
-      totalHT: Number(l.totalHT),
-      totalTTC: Number(l.totalTTC),
-      purchaseCostPUMP: Number(l.purchaseCostPUMP)
-    }));
+    const computed: ComputedLine[] = refreshedLines.map(toComputedLine);
     const summary = summarize(computed, Number(document.remise), document.paymentMode);
 
     const updated = await tx.document.update({
@@ -635,17 +696,22 @@ export async function cancelDocument(documentId: string) {
     }
 
     for (const line of document.lines) {
+      // La contrepassation doit rendre EXACTEMENT ce que la validation avait
+      // pris — bonus compris, sinon chaque annulation ferait fondre le stock de
+      // la quantite offerte.
+      const sortant = qtyStock(line);
+
       if (isTransfer(type)) {
         if (!document.destDepotId) throw new Error('DEST_DEPOT_REQUIRED_FOR_TRANSFER');
         // Reverse: give the quantity back to the source depot, take it back off the
         // destination depot.
         await tx.articleStock.update({
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-          data: { qtyInStock: { increment: line.quantity } }
+          data: { qtyInStock: { increment: sortant } }
         });
         await tx.articleStock.update({
           where: { articleId_depotId: { articleId: line.articleId, depotId: document.destDepotId } },
-          data: { qtyInStock: { decrement: line.quantity } }
+          data: { qtyInStock: { decrement: sortant } }
         });
         continue;
       }
@@ -659,21 +725,25 @@ export async function cancelDocument(documentId: string) {
         if (recalculatesPump(type)) {
           const article = await tx.article.findUnique({ where: { id: line.articleId } });
           if (article) {
-            const remainingQty = stock.qtyInStock - line.quantity;
+            // Miroir du calcul de validation: on retire la quantite RECUE du
+            // stock et seulement la valeur FACTUREE de la masse.
+            const remainingQty = stock.qtyInStock - sortant;
             const currentPump = Number(article.pump);
             const lineCost = Number(line.purchaseCostPUMP);
-            const revertedPump = remainingQty > 0 ? (stock.qtyInStock * currentPump - line.quantity * lineCost) / remainingQty : currentPump;
+            const valeurRetiree = line.quantity * lineCost;
+            const revertedPump =
+              remainingQty > 0 ? (stock.qtyInStock * currentPump - valeurRetiree) / remainingQty : currentPump;
             await tx.article.update({ where: { id: line.articleId }, data: { pump: Math.max(revertedPump, 0) } });
           }
         }
         await tx.articleStock.update({
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-          data: { qtyInStock: { decrement: line.quantity } }
+          data: { qtyInStock: { decrement: sortant } }
         });
       } else if (isConsuming(type)) {
         await tx.articleStock.update({
           where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } },
-          data: { qtyInStock: { increment: line.quantity } }
+          data: { qtyInStock: { increment: sortant } }
         });
       }
     }
@@ -735,13 +805,20 @@ export async function receiveCommande(commandeId: string, receivedById?: string)
       motif: `Réception commande ${commande.reference}`,
       paymentMode: commande.paymentMode as PaymentMode,
       remise: Number(commande.remise),
+      // La reception reprend la commande a l'identique, bonus et conditionnement
+      // compris: un carton offert commande doit entrer en stock a la reception.
       lines: commande.lines.map((l) => ({
         articleId: l.articleId,
         depotId: l.depotId,
         quantity: l.quantity,
         unitPriceHT: Number(l.unitPriceHT),
         discountPercent: Number(l.discountPercent),
-        tvaRate: Number(l.tvaRate)
+        tvaRate: Number(l.tvaRate),
+        emballage: l.emballage,
+        nbColis: l.nbColis,
+        numeroColis: l.numeroColis,
+        quantiteBonus: l.quantiteBonus,
+        ristourne: Number(l.ristourne)
       }))
     },
     receivedById

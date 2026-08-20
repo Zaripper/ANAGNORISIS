@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiRequest, ApiError, getStoredUser } from '../services/apiClient';
 import { AppShell, DjemroudLogo } from '../components/AppShell';
 import type { ScreenId } from './navigation';
-import type { UserRole } from '@anagnorisis/shared';
+import { computeDocTotals, lineTotalHT, quantiteDepuisColis, type Emballage, type UserRole } from '@anagnorisis/shared';
 import {
   CHARGE_CLASS_FIELDS,
   DEPOT_FIELDS,
@@ -160,12 +160,24 @@ export interface DocLine {
   articleId: string;
   code: string;
   designation: string;
+  /** Quantité facturée. Le bonus s'y ajoute au stock, jamais au prix. */
   qte: number;
   pump: number;
   prixVente: number;
   remisePercent: number;
   montantHT: number;
   tvaRate: number;
+  /** Mode de saisie: au colis (gros) ou à l'unité (détail). */
+  emballage: Emballage;
+  /** Nombre de colis, quand emballage vaut COLISAGE. */
+  nbColis: number | null;
+  /** Colisage de l'article, pour afficher la quantité qui en découle. */
+  colisage: number | null;
+  numeroColis: string | null;
+  /** Quantité offerte: sort du stock, ne se facture pas. */
+  quantiteBonus: number;
+  /** Ristourne en valeur, appliquée après la remise en pourcentage. */
+  ristourne: number;
 }
 
 interface CashTransaction {
@@ -214,7 +226,12 @@ export interface DocumentRow {
     totalHT: number | string;
     totalTTC: number | string;
     purchaseCostPUMP: number | string;
-    article?: { code: string; designation: string };
+    emballage?: Emballage;
+    nbColis?: number | null;
+    numeroColis?: string | null;
+    quantiteBonus?: number;
+    ristourne?: number | string;
+    article?: { code: string; designation: string; colisage?: number | null };
     depot?: { name: string };
   }[];
 }
@@ -2844,17 +2861,36 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   );
 
   // Helpers
-  const handleUpdateLineQuantity = (id: string, qte: number) => {
-    setLines(
-      lines.map((l) => {
-        if (l.id === id) {
-          const validQte = Math.max(1, qte);
-          const montant = validQte * l.prixVente * (1 - l.remisePercent / 100);
-          return { ...l, qte: validQte, montantHT: montant };
-        }
-        return l;
+  /**
+   * Recalcule le montant d'une ligne après n'importe quelle modification.
+   *
+   * Passe par `lineTotalHT` (couche partagée) plutôt que de refaire le calcul:
+   * la remise, la ristourne et leur ordre d'application doivent être décrits à
+   * un seul endroit, celui que le serveur utilise aussi.
+   */
+  const recalcLine = (l: DocLine): DocLine => {
+    const qte = l.emballage === 'COLISAGE' ? quantiteDepuisColis(l.nbColis ?? 0, l.colisage) : l.qte;
+    return {
+      ...l,
+      qte,
+      montantHT: lineTotalHT({
+        quantity: qte,
+        unitPriceHT: l.prixVente,
+        discountPercent: l.remisePercent,
+        tvaRate: l.tvaRate,
+        purchaseCostPUMP: l.pump,
+        ristourne: l.ristourne
       })
-    );
+    };
+  };
+
+  const updateLine = (id: string, patch: Partial<DocLine>) => {
+    setLines(lines.map((l) => (l.id === id ? recalcLine({ ...l, ...patch }) : l)));
+  };
+
+  const handleUpdateLineQuantity = (id: string, qte: number) => {
+    // 0 est permis: une ligne peut être entièrement bonus.
+    updateLine(id, { qte: Math.max(0, qte) });
   };
 
   /**
@@ -2863,7 +2899,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
    * applicable peut différer selon l'opération.
    */
   const handleUpdateLineTva = (id: string, tvaRate: number) => {
-    setLines(lines.map((l) => (l.id === id ? { ...l, tvaRate } : l)));
+    updateLine(id, { tvaRate });
   };
 
   const handleRemoveLine = (id: string) => {
@@ -2885,7 +2921,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
       prixVente: art.priceHT,
       remisePercent: 0,
       montantHT: art.priceHT,
-      tvaRate: art.tvaRate
+      tvaRate: art.tvaRate,
+      emballage: 'VRAC',
+      nbColis: null,
+      colisage: art.colisage ?? null,
+      numeroColis: null,
+      quantiteBonus: 0,
+      ristourne: 0
     };
     setLines([...lines, newLine]);
   };
@@ -2906,7 +2948,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         prixVente: art.priceHT,
         remisePercent: 0,
         montantHT: qty * art.priceHT,
-        tvaRate: art.tvaRate
+        tvaRate: art.tvaRate,
+        emballage: 'VRAC',
+        nbColis: null,
+        colisage: art.colisage ?? null,
+        numeroColis: null,
+        quantiteBonus: 0,
+        ristourne: 0
       };
     });
     setLines([...lines, ...newLines]);
@@ -2955,7 +3003,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         prixVente: num(l.unitPriceHT),
         remisePercent: num(l.discountPercent),
         montantHT: num(l.totalHT),
-        tvaRate: num(l.tvaRate)
+        tvaRate: num(l.tvaRate),
+        emballage: (l.emballage ?? 'VRAC') as Emballage,
+        nbColis: l.nbColis ?? null,
+        colisage: l.article?.colisage ?? null,
+        numeroColis: l.numeroColis ?? null,
+        quantiteBonus: l.quantiteBonus ?? 0,
+        ristourne: num(l.ristourne)
       }))
     : lines;
 
@@ -2988,7 +3042,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         prixVente: num(l.unitPriceHT),
         remisePercent: num(l.discountPercent),
         montantHT: num(l.totalHT),
-        tvaRate: num(l.tvaRate)
+        tvaRate: num(l.tvaRate),
+        emballage: (l.emballage ?? 'VRAC') as Emballage,
+        nbColis: l.nbColis ?? null,
+        colisage: l.article?.colisage ?? null,
+        numeroColis: l.numeroColis ?? null,
+        quantiteBonus: l.quantiteBonus ?? 0,
+        ristourne: num(l.ristourne)
       }))
     );
     setEditingDocumentId(viewingDocDetail.id);
@@ -2996,18 +3056,43 @@ export default function App({ onLogout }: { onLogout: () => void }) {
     setViewingDocId(null);
   }
 
-  // Calculations — pulled from the stored document when browsing, computed live when drafting
-  const totalHT = viewingDocDetail ? num(viewingDocDetail.totalHT) : lines.reduce((acc, l) => acc + l.montantHT, 0);
-  const totalTVA = viewingDocDetail ? num(viewingDocDetail.totalTVA) : lines.reduce((acc, l) => acc + l.montantHT * (l.tvaRate / 100), 0);
-  const totalTimbre = viewingDocDetail
-    ? num(viewingDocDetail.stampDuty)
-    : paymentType === 'ESPECE' && totalHT + totalTVA > 0
-    ? Math.min(Math.max((totalHT + totalTVA) * 0.01, 5), 2500)
-    : 0;
-  const totalTTC = viewingDocDetail ? num(viewingDocDetail.totalTTC) : totalHT + totalTVA;
-  const totalNet = viewingDocDetail ? totalTTC : totalTTC + totalTimbre;
-  const totalMargeDZD = viewingDocDetail ? num(viewingDocDetail.marginHT) : totalHT - lines.reduce((acc, l) => acc + l.pump * l.qte, 0);
-  const margePercent = viewingDocDetail ? num(viewingDocDetail.marginPercent) : totalHT > 0 ? (totalMargeDZD / totalHT) * 100 : 0;
+  /**
+   * Totaux de l'écran.
+   *
+   * En consultation ils viennent du document stocké; en saisie ils sont calculés
+   * par `computeDocTotals`, la MÊME fonction que le serveur.
+   *
+   * Cet écran recalculait auparavant le timbre à la main, avec l'ancienne règle
+   * (1 %, plancher 5, plafond 2 500). Le barème progressif étant entré en vigueur
+   * côté serveur, le caissier voyait un total et la facture en imprimait un autre.
+   * Refaire ce calcul ici, sous quelque forme que ce soit, recrée la divergence.
+   */
+  const apercu = useMemo(
+    () =>
+      computeDocTotals(
+        lines.map((l) => ({
+          quantity: l.qte,
+          unitPriceHT: l.prixVente,
+          discountPercent: l.remisePercent,
+          tvaRate: l.tvaRate,
+          purchaseCostPUMP: l.pump,
+          quantiteBonus: l.quantiteBonus,
+          ristourne: l.ristourne
+        })),
+        0,
+        paymentType
+      ),
+    [lines, paymentType]
+  );
+
+  const totalHT = viewingDocDetail ? num(viewingDocDetail.totalHT) : apercu.totalHT;
+  const totalTVA = viewingDocDetail ? num(viewingDocDetail.totalTVA) : apercu.totalTVA;
+  const totalTimbre = viewingDocDetail ? num(viewingDocDetail.stampDuty) : apercu.stampDuty;
+  const totalTTC = viewingDocDetail ? num(viewingDocDetail.totalTTC) : apercu.totalTTC;
+  const totalNet = totalTTC;
+  // `computeDocTotals` inclut déjà le timbre dans le TTC: le net à payer, c'est lui.
+  const totalMargeDZD = viewingDocDetail ? num(viewingDocDetail.marginHT) : apercu.marginHT;
+  const margePercent = viewingDocDetail ? num(viewingDocDetail.marginPercent) : apercu.marginPercent;
 
   async function handleSaveDocument() {
     const editableViews: ERPView[] = ['ACHATS', 'BONS_PREP', 'VENTES_VALIDATION', 'AVOIRS_ACHATS', 'AVOIRS_VENTES'];
@@ -3045,7 +3130,12 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           quantity: l.qte,
           unitPriceHT: l.prixVente,
           discountPercent: l.remisePercent,
-          tvaRate: l.tvaRate
+          tvaRate: l.tvaRate,
+          emballage: l.emballage,
+          nbColis: l.nbColis,
+          numeroColis: l.numeroColis,
+          quantiteBonus: l.quantiteBonus,
+          ristourne: l.ristourne
         }))
       };
 
@@ -3585,9 +3675,14 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                       <th className="p-3 w-32">Dépôt</th>
                       <th className="p-3 w-28">Code</th>
                       <th className="p-3">Désignation Produit</th>
+                      <th className="p-3 text-center w-24">Emballage</th>
                       <th className="p-3 text-center w-20">Qté</th>
+                      <th className="p-3 text-center w-20" title="Quantité offerte: sort du stock, non facturée">
+                        Bonus
+                      </th>
                       <th className="p-3 text-right w-24">P.U.M.P.</th>
                       <th className="p-3 text-right w-28">Prix Vente</th>
+                      <th className="p-3 text-right w-24">Ristourne</th>
                       <th className="p-3 text-right w-28">Montant HT</th>
                       <th className="p-3 text-center w-16">TVA</th>
                       <th className="p-3 text-center w-12"></th>
@@ -3596,7 +3691,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                   <tbody className="divide-y divide-slate-100">
                     {displayLines.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-16 text-center text-slate-400 font-medium">
+                        <td colSpan={14} className="p-16 text-center text-slate-400 font-medium">
                           {isReadOnly ? (
                             'Ce document ne contient aucune ligne.'
                           ) : (
@@ -3617,21 +3712,96 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                           <td className="p-3 text-slate-500 font-medium">{line.depotLabel}</td>
                           <td className="p-3 font-mono font-bold text-slate-800">{line.code}</td>
                           <td className="p-3 font-medium text-slate-900">{line.designation}</td>
+                          {/* Emballage: en colis, la quantité découle du colisage de la fiche
+                              article et le champ Qté n'est plus saisissable. */}
                           <td className="p-3 text-center">
                             {isReadOnly ? (
-                              <span className="font-bold font-mono">{line.qte}</span>
+                              <span className="text-[11px] text-slate-500">
+                                {line.emballage === 'COLISAGE' ? `${line.nbColis ?? 0} colis` : 'Vrac'}
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-1 justify-center">
+                                <select
+                                  value={line.emballage}
+                                  onChange={(e) =>
+                                    updateLine(line.id, {
+                                      emballage: e.target.value as Emballage,
+                                      nbColis: e.target.value === 'COLISAGE' ? line.nbColis ?? 1 : null
+                                    })
+                                  }
+                                  className="border border-slate-200 rounded-lg px-1 py-1 text-[11px] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                                  aria-label={`Emballage pour ${line.code}`}
+                                >
+                                  <option value="VRAC">Vrac</option>
+                                  <option value="COLISAGE">Colis</option>
+                                </select>
+                                {line.emballage === 'COLISAGE' && (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={line.nbColis ?? 0}
+                                    onChange={(e) => updateLine(line.id, { nbColis: parseInt(e.target.value) || 0 })}
+                                    className="w-12 text-center border border-slate-200 rounded-lg font-mono text-[11px] py-1 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                                    aria-label={`Nombre de colis pour ${line.code}`}
+                                  />
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {isReadOnly || line.emballage === 'COLISAGE' ? (
+                              <span
+                                className="font-bold font-mono"
+                                title={line.emballage === 'COLISAGE' ? `${line.nbColis ?? 0} × ${line.colisage ?? 1}` : undefined}
+                              >
+                                {line.qte}
+                              </span>
                             ) : (
                               <input
                                 type="number"
-                                min="1"
+                                min="0"
                                 value={line.qte}
-                                onChange={(e) => handleUpdateLineQuantity(line.id, parseInt(e.target.value) || 1)}
+                                onChange={(e) => handleUpdateLineQuantity(line.id, parseInt(e.target.value) || 0)}
                                 className="w-14 text-center border border-slate-200 rounded-lg font-bold font-mono py-1 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                              />
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {isReadOnly ? (
+                              line.quantiteBonus > 0 ? (
+                                <span className="font-mono font-bold text-[#0F5B38]">+{line.quantiteBonus}</span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                value={line.quantiteBonus}
+                                onChange={(e) => updateLine(line.id, { quantiteBonus: Math.max(0, parseInt(e.target.value) || 0) })}
+                                className="w-14 text-center border border-slate-200 rounded-lg font-mono py-1 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                                aria-label={`Quantité bonus pour ${line.code}`}
+                                title="Marchandise offerte: sort du stock, non facturée"
                               />
                             )}
                           </td>
                           <td className="p-3 text-right font-mono text-slate-400">{line.pump.toFixed(2)}</td>
                           <td className="p-3 text-right font-mono font-semibold text-slate-800">{line.prixVente.toFixed(2)}</td>
+                          <td className="p-3 text-right">
+                            {isReadOnly ? (
+                              <span className="font-mono text-slate-500">{line.ristourne.toFixed(2)}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={line.ristourne}
+                                onChange={(e) => updateLine(line.id, { ristourne: Math.max(0, parseFloat(e.target.value) || 0) })}
+                                className="w-20 text-right border border-slate-200 rounded-lg font-mono py-1 px-1.5 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                                aria-label={`Ristourne pour ${line.code}`}
+                              />
+                            )}
+                          </td>
                           <td className="p-3 text-right font-mono font-bold text-slate-900">{line.montantHT.toFixed(2)}</td>
                           <td className="p-3 text-center">
                             {isReadOnly ? (

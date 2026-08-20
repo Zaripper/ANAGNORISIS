@@ -66,6 +66,15 @@ enum ChequeEtat {
   ANNULE
 }
 
+/// Mode de saisie des quantites sur une ligne.
+/// VRAC: la quantite est saisie a l'unite (detail).
+/// COLISAGE: l'operateur saisit un nombre de colis, la quantite en unites en
+/// decoule du colisage de l'article (gros).
+enum Emballage {
+  VRAC
+  COLISAGE
+}
+
 /// Politique de prix d'un article pour une categorie de partenaire.
 /// PRIX_SAISI: le prix de vente est saisi tel quel.
 /// TAUX: le prix est derive du P.U.M.P par application d'un taux de marge.
@@ -348,6 +357,7 @@ model DocumentLine {
   article          Article  @relation(fields: [articleId], references: [id])
   depotId          String
   depot            Depot    @relation(fields: [depotId], references: [id])
+  /// Quantite facturee, en unites. Le bonus n'y est PAS inclus.
   quantity         Int
   unitPriceHT      Decimal
   discountPercent  Decimal  @default(0.0)
@@ -355,6 +365,18 @@ model DocumentLine {
   totalHT          Decimal  @default(0.0)
   totalTTC         Decimal  @default(0.0)
   purchaseCostPUMP Decimal  @default(0.0)
+  /// Mode de saisie de la quantite: au colis (gros) ou a l'unite (detail).
+  emballage        Emballage @default(VRAC)
+  /// Nombre de colis saisi quand emballage = COLISAGE. La quantite en unites en
+  /// decoule (nbColis x colisage de l'article) et reste la seule reference pour
+  /// le stock.
+  nbColis          Int?
+  /// Numero de colis porte sur le bon de livraison, pour le suivi physique.
+  numeroColis      String?
+  /// Quantite offerte. Elle sort du stock mais ne se facture pas.
+  quantiteBonus    Int      @default(0)
+  /// Ristourne en valeur, appliquee apres la remise en pourcentage.
+  ristourne        Decimal  @default(0.0)
 
   @@index([documentId])
   @@index([articleId])
