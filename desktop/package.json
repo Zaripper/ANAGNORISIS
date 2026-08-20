@@ -6,9 +6,10 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit && vite build --config vite.electron.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
-    "lint": "echo \"desktop: lint not configured\""
+    "lint": "echo \"desktop: lint not configured\"",
+    "dev:app": "vite --config vite.electron.config.ts"
   },
   "dependencies": {
     "@anagnorisis/shared": "file:../shared",

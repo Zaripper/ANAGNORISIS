@@ -11,14 +11,15 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "dev": "concurrently -k -n API,DESKTOP -c cyan,magenta \"npm run dev --workspace server\" \"npm run dev --workspace desktop\"",
+    "dev": "concurrently -k -n API,WEB -c cyan,magenta \"npm run dev --workspace server\" \"npm run dev --workspace desktop\"",
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "db:generate": "npm run prisma:generate --workspace server",
     "db:push": "npm run prisma:push --workspace server",
     "db:seed": "npm run prisma:seed --workspace server",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "dev:app": "concurrently -k -n API,APP -c cyan,magenta \"npm run dev --workspace server\" \"npm run dev:app --workspace desktop\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

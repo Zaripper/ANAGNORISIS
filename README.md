@@ -81,13 +81,34 @@ npm run db:seed
 npm run dev
 ```
 
-Starts the API on `:5000`, the Vite dev server on `:5173`, and opens the
-Electron window (with DevTools attached). Hot reload applies to both the API and
-the UI.
+Starts the API on `:5000` and the Vite dev server on `:5173`. Hot reload applies
+to both. Open <http://localhost:5173> in any browser — the app is identical
+there.
 
-To work in a normal browser instead of the Electron window, open
-<http://localhost:5173> — the app is identical there, which is handy for
-debugging.
+To run the Electron desktop shell as well:
+
+```bash
+npm run dev:app
+```
+
+**The two are deliberately separate.** The Electron plugin ties Vite's lifetime
+to the desktop window: closing the window stops Vite, and the root
+`concurrently -k` then stops the API with it. That is fine when you *are* the
+desktop app, but it meant an ordinary `npm run dev` gave you a server that died
+whenever the window closed — which is wrong for a LAN setup where the server
+runs on its own machine. Hence `vite.config.ts` (web only) and
+`vite.electron.config.ts` (adds the Electron plugin).
+
+If the UI ever shows work you know is already written, suspect a **stale second
+server**: check for leftover `node` processes from an earlier session before
+debugging anything else.
+
+```bash
+npm run build
+```
+
+Builds through `vite.electron.config.ts`, so `dist/` (web assets) and
+`dist-electron/` (`main.js`, `preload.js`) are both produced.
 
 Default seeded login: `admin` / `admin123` — **change this before any real use.**
 
