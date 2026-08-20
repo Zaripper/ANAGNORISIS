@@ -69,21 +69,34 @@ function DocumentsTable({
 }
 
 /**
- * File d'attente de validation des bons de préparation: everything OUVERT, with
- * one-click validation. Made for a user whose whole job is confirming prep slips.
+ * File d'attente de validation.
+ *
+ * Le logiciel actuel sépare toujours la saisie de la validation: n'importe qui
+ * prépare un document, un responsable le valide. C'est cette séparation qui
+ * permettra de restreindre la validation à l'administrateur sans toucher à la
+ * saisie. L'écran est donc générique — bons de préparation, achats — plutôt que
+ * dupliqué par type.
  */
 export function ValidationQueueScreen({
+  type,
+  title,
+  description,
   documents,
   onChanged,
   onPrint
 }: {
+  type: string;
+  title: string;
+  /** Rappelle à l'écran ce que « valider » déclenche réellement. */
+  description: (enAttente: number) => string;
   documents: DocumentRow[];
   onChanged: () => Promise<void>;
   onPrint: (docId: string) => void;
 }) {
   const toasts = useToasts();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const queue = useMemo(() => documents.filter((d) => d.type === 'BON_PREPARATION' && d.status === 'OUVERT'), [documents]);
+  const estBonPreparation = type === 'BON_PREPARATION';
+  const queue = useMemo(() => documents.filter((d) => d.type === type && d.status === 'OUVERT'), [documents, type]);
 
   /**
    * Balayage des bons échus à l'ouverture de l'écran.
@@ -94,6 +107,7 @@ export function ValidationQueueScreen({
    * toute façon consulté avant chaque validation.
    */
   useEffect(() => {
+    if (!estBonPreparation) return;
     let annule = false;
     (async () => {
       try {
@@ -122,7 +136,7 @@ export function ValidationQueueScreen({
     try {
       if (action === 'validate') {
         await apiRequest(`/documents/${doc.id}/validate`, { method: 'POST' });
-        toasts.success(`${doc.reference} validé — stock et solde client mis à jour.`);
+        toasts.success(`${doc.reference} validé — stock et solde mis à jour.`);
       } else {
         await apiRequest(`/documents/${doc.id}`, { method: 'DELETE' });
         toasts.success(`${doc.reference} supprimé — réservations libérées.`);
@@ -136,24 +150,24 @@ export function ValidationQueueScreen({
   }
 
   return (
-    <Screen
-      title="Validation des bons de préparation"
-      description={`${queue.length} bon(s) en attente. Valider consomme le stock réservé et impute le solde client.`}
-      maxWidth="max-w-6xl"
-    >
+    <Screen title={title} description={description(queue.length)} maxWidth="max-w-6xl">
       <Card className="flex-1 min-h-0" padded={false}>
         <div className="p-3 flex-1 min-h-0">
           <DocumentsTable
             rows={queue}
-            emptyMessage="Aucun bon en attente de validation."
-            extraColumns={[
-              {
-                key: 'validite',
-                header: 'Validité',
-                align: 'center',
-                render: (d: DocumentRow) => <EcheanceBP dateValidite={d.dateValidite} />
-              }
-            ]}
+            emptyMessage="Aucun document en attente de validation."
+            extraColumns={
+              estBonPreparation
+                ? [
+                    {
+                      key: 'validite',
+                      header: 'Validité',
+                      align: 'center',
+                      render: (d: DocumentRow) => <EcheanceBP dateValidite={d.dateValidite} />
+                    }
+                  ]
+                : undefined
+            }
             extraActions={(d) => (
               <div className="flex justify-end gap-1.5">
                 <Button size="sm" variant="secondary" onClick={() => onPrint(d.id)}>

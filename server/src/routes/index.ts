@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { cancelCashEntry, createCashEntry, validateCashEntry } from '../services/caisse.service';
 import {
   buildDocumentPreview,
   cancelDocument,
@@ -24,6 +25,7 @@ import {
 } from '../services/report.service';
 import {
   createArticleSchema,
+  cashStatuses,
   createCashTransactionSchema,
   createChargeClassSchema,
   createChargeSchema,
@@ -522,7 +524,7 @@ api.post('/documents/expire-bons-preparation', async (_req, res) => {
 
 // ---------- Cash journal ----------
 api.get('/cash', async (req, res) => {
-  const { paymentMode } = req.query;
+  const { paymentMode, status } = req.query;
   let paymentModeFilter: any;
   if (paymentMode === 'NON_ESPECE') {
     paymentModeFilter = { not: 'ESPECE' };
@@ -530,40 +532,51 @@ api.get('/cash', async (req, res) => {
     paymentModeFilter = paymentMode;
   }
 
+  const statusFilter =
+    typeof status === 'string' && (cashStatuses as readonly string[]).includes(status) ? (status as any) : undefined;
+
   const transactions = await prisma.cashTransaction.findMany({
-    where: { paymentMode: paymentModeFilter },
+    where: { paymentMode: paymentModeFilter, status: statusFilter },
     include: { partner: true },
     orderBy: { createdAt: 'desc' },
     take: 200
   });
-  const totalBalance = transactions.reduce((sum: number, tx) => sum + Number(tx.amount) * (tx.type === 'RECETTE' ? 1 : -1), 0);
+
+  // Le solde de caisse ne compte que les ecritures validees: un brouillon n'a
+  // pas encore d'existence comptable, et l'inclure ferait afficher un fonds de
+  // caisse que personne n'a compte.
+  const totalBalance = transactions
+    .filter((tx) => tx.status === 'VALIDE')
+    .reduce((sum: number, tx) => sum + Number(tx.amount) * (tx.type === 'RECETTE' ? 1 : -1), 0);
   res.json({ transactions, totalBalance });
 });
 
+/**
+ * Une ecriture liee a un partenaire est un reglement: elle solde ce qui est en
+ * jeu dans la relation, que le partenaire nous doive ou que nous lui devions.
+ * L'imputation vit desormais dans caisse.service, seul endroit qui touche un
+ * solde depuis la caisse.
+ */
 api.post('/cash', requireRole('ADMINISTRATEUR', 'CAISSIER'), async (req, res) => {
   try {
     const input = createCashTransactionSchema.parse(req.body);
+    res.status(201).json(await createCashEntry(input, req.user?.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
 
-    const transaction = await prisma.$transaction(async (tx) => {
-      if (input.partnerId) {
-        const partner = await tx.partner.findUnique({ where: { id: input.partnerId } });
-        if (!partner) throw new Error('PARTNER_NOT_FOUND');
-      }
+api.post('/cash/:id/validate', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    res.json(await validateCashEntry(req.params.id, req.user?.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+});
 
-      const created = await tx.cashTransaction.create({ data: input, include: { partner: true } });
-
-      // A cash/cheque/virement entry tied to a partner is a settlement: it always
-      // pays down whatever is outstanding in that relationship (whether they owed
-      // us or we owed them), so it always decrements the balance — regardless of
-      // whether it's booked as a RECETTE or a DEPENSE in the cash journal itself.
-      if (input.partnerId) {
-        await tx.partner.update({ where: { id: input.partnerId }, data: { balance: { decrement: input.amount } } });
-      }
-
-      return created;
-    });
-
-    res.status(201).json(transaction);
+api.post('/cash/:id/cancel', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    res.json(await cancelCashEntry(req.params.id));
   } catch (error) {
     handleError(res, error);
   }

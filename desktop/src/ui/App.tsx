@@ -40,6 +40,7 @@ import { AccueilScreen } from '../screens/Accueil';
 import { ArticlesFichierScreen } from '../screens/ArticlesFichier';
 import { PartenairesFichierScreen } from '../screens/PartenairesFichier';
 import { ChequesScreen } from '../screens/Cheques';
+import { SaisieCaisseScreen } from '../screens/SaisieCaisse';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -3321,7 +3322,26 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {/* ---------- CONSULTATION ---------- */}
         {currentView === 'VALIDATION_BON_PREP' && (
-          <ValidationQueueScreen documents={documents} onChanged={refreshAll} onPrint={handlePrintDocument} />
+          <ValidationQueueScreen
+            type="BON_PREPARATION"
+            title="Validation des bons de préparation"
+            description={(n) => `${n} bon(s) en attente. Valider consomme le stock réservé et impute le solde client.`}
+            documents={documents}
+            onChanged={refreshAll}
+            onPrint={handlePrintDocument}
+          />
+        )}
+        {currentView === 'ACHATS_VALIDATION' && (
+          <ValidationQueueScreen
+            type="ACHAT"
+            title="Saisie et validation des achats"
+            description={(n) =>
+              `${n} achat(s) en attente. Valider fait entrer la marchandise en stock, recalcule le P.U.M.P et crédite le fournisseur.`
+            }
+            documents={documents}
+            onChanged={refreshAll}
+            onPrint={handlePrintDocument}
+          />
         )}
         {currentView === 'LISTE_BONS_PREP' && (
           <DocumentListScreen
@@ -3432,6 +3452,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* ---------- CHEQUES: suivi par etat (recette / depense) ---------- */}
+        {currentView === 'SAISIE_CAISSE' && <SaisieCaisseScreen partners={partners} onSaved={refreshAll} />}
         {currentView === 'CHEQUES_RECETTE' && <ChequesScreen type="RECETTE" partners={partners} onSaved={refreshAll} />}
         {currentView === 'CHEQUES_DEPENSE' && <ChequesScreen type="DEPENSE" partners={partners} onSaved={refreshAll} />}
 

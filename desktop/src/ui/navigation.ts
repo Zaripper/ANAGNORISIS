@@ -143,7 +143,7 @@ export const SCREENS: ScreenDef[] = [
   // ---------- Mouvement ----------
   { id: 'CHARGES', label: 'Charges', group: 'Mouvement', keywords: 'depenses frais loyer', implemented: true },
   { id: 'ACHATS', label: 'Achats', group: 'Mouvement', keywords: 'saisie achat fournisseur', implemented: true },
-  { id: 'ACHATS_VALIDATION', label: 'Saisie et validation des achats', group: 'Mouvement', keywords: 'achat valide immediat', implemented: false },
+  { id: 'ACHATS_VALIDATION', label: 'Saisie et validation des achats', group: 'Mouvement', keywords: 'achat valide immediat file attente', implemented: true },
   { id: 'AVOIRS_ACHATS', label: 'Avoirs achats', group: 'Mouvement', keywords: 'retour fournisseur', implemented: true },
   { id: 'BONS_PREP', label: 'Bons de préparation', group: 'Mouvement', keywords: 'commande client reservation bp', implemented: true },
   { id: 'VALIDATION_BON_PREP', label: 'Validation bon de préparation', group: 'Mouvement', keywords: 'valider file attente', implemented: true },
@@ -158,7 +158,7 @@ export const SCREENS: ScreenDef[] = [
   { id: 'CHEQUES_RECETTE', label: 'Chèques recette', group: 'Mouvement', keywords: 'encaissement cheque recu', implemented: true },
   { id: 'CHEQUES_DEPENSE', label: 'Chèques dépense', group: 'Mouvement', keywords: 'decaissement cheque emis', implemented: true },
   { id: 'VIREMENT', label: 'Virement ou versement', group: 'Mouvement', keywords: 'banque transfert', implemented: true },
-  { id: 'SAISIE_CAISSE', label: 'Saisie de la caisse et validation', group: 'Mouvement', keywords: 'encaissement decaissement especes recu', implemented: false },
+  { id: 'SAISIE_CAISSE', label: 'Saisie de la caisse et validation', group: 'Mouvement', keywords: 'encaissement decaissement especes recu brouillon', implemented: true },
   { id: 'TRANSACTIONS_CAISSIERES', label: 'Transactions caissières', group: 'Mouvement', keywords: 'toutes operations', implemented: true },
 
   // ---------- Consultation ----------

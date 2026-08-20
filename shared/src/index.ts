@@ -608,6 +608,25 @@ export const updateDocumentSchema = createDocumentSchema;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 
 // ---------- Cash journal ----------
+export const cashStatuses = ['OUVERT', 'VALIDE', 'ANNULE'] as const;
+export type CashStatus = (typeof cashStatuses)[number];
+
+export const CASH_STATUS_LABELS: Record<CashStatus, string> = {
+  OUVERT: 'À valider',
+  VALIDE: 'Validée',
+  ANNULE: 'Annulée'
+};
+
+/**
+ * Seule une écriture validée impute un solde.
+ *
+ * C'est la règle qui donne son sens à la séparation saisie / validation: tant
+ * qu'un mouvement de caisse est en brouillon, il n'existe pas comptablement.
+ */
+export function cashEntryImputesBalance(status: CashStatus): boolean {
+  return status === 'VALIDE';
+}
+
 export const createCashTransactionSchema = z.object({
   type: z.enum(cashTxTypes),
   amount: z.number().positive(),
@@ -615,7 +634,13 @@ export const createCashTransactionSchema = z.object({
   description: z.string().min(1),
   partnerId: z.string().uuid().optional().nullable(),
   reference: z.string().optional().nullable(),
-  bankName: z.string().optional().nullable()
+  bankName: z.string().optional().nullable(),
+  /**
+   * Par défaut VALIDE, pour que les appelants existants (et les écritures nées
+   * d'un document ou d'un chèque) gardent exactement le comportement d'avant.
+   * Seule la saisie de caisse demande explicitement OUVERT.
+   */
+  status: z.enum(cashStatuses).default('VALIDE')
 });
 export type CreateCashTransactionInput = z.infer<typeof createCashTransactionSchema>;
 

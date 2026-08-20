@@ -54,6 +54,16 @@ enum CashTxType {
   DEPENSE
 }
 
+/// Etat d'une ecriture de caisse.
+/// OUVERT: saisie par un caissier, sans effet sur le solde du partenaire.
+/// VALIDE: imputee. C'est le seul etat qui bouge un solde.
+/// ANNULE: annulee; si elle avait ete validee, son imputation est contrepassee.
+enum CashStatus {
+  OUVERT
+  VALIDE
+  ANNULE
+}
+
 /// Etats d'un cheque, repris du logiciel actuel.
 /// EN_INSTANCE: recu, pas encore remis en banque (cheques recette uniquement).
 /// MIS_EN_PAIEMENT: remis en banque (recette) ou emis (depense).
@@ -442,9 +452,19 @@ model CashTransaction {
   amount      Decimal
   paymentMode PaymentMode
   description String
+  /// Etat de l'ecriture. La valeur par defaut est VALIDE, et c'est deliberé:
+  /// les ecritures nees d'un document ou d'un cheque sont deja le reflet d'une
+  /// operation validee ailleurs, et ne doivent surtout pas attendre une
+  /// seconde validation. Seule la saisie manuelle de caisse part en OUVERT.
+  status      CashStatus  @default(VALIDE)
+  createdById String?
+  validatedById String?
+  validatedAt DateTime?
+  cancelledAt DateTime?
   createdAt   DateTime    @default(now())
   cheque      Cheque?
 
   @@index([createdAt])
   @@index([partnerId])
+  @@index([status, paymentMode])
 }
