@@ -19,7 +19,7 @@ export async function resetDatabase() {
     TRUNCATE TABLE
       "DocumentLineLot", "Lot", "Cheque", "DocumentLine", "Document", "CashTransaction", "Charge", "ChargeClass",
       "ArticleStock", "ArticlePrice", "Article",
-      "Partner", "PartnerCategory", "Zone", "Livreur", "TypeReglement",
+      "Partner", "PartnerCategory", "Zone", "Livreur", "TypeRegule",
       "Depot", "Comment", "AppSetting", "User"
     RESTART IDENTITY CASCADE
   `);
@@ -37,6 +37,8 @@ export interface Fixtures {
   /** pump 200, TVA 0%, stock 40 (main only) */
   articleB: { id: string };
   user: { id: string };
+  /** Motif de regularisation "ecart d'inventaire", valable dans les deux sens. */
+  typeRegule: { id: string };
 }
 
 export async function seedFixtures(): Promise<Fixtures> {
@@ -84,7 +86,12 @@ export async function seedFixtures(): Promise<Fixtures> {
     data: { username: 'tester', passwordHash: 'x', role: 'ADMINISTRATEUR' }
   });
 
-  return { depotMain, depotShop, catClient, catSupplier, client, supplier, articleA, articleB, user };
+  // Toute regularisation exige un motif: les tests de stock en ont besoin.
+  const typeRegule = await prisma.typeRegule.create({
+    data: { code: 'ECART_INV', label: "Ecart d'inventaire", sens: 'TOUS' }
+  });
+
+  return { depotMain, depotShop, catClient, catSupplier, client, supplier, articleA, articleB, user, typeRegule };
 }
 
 /** Current physical + reserved quantities for one article in one depot. */

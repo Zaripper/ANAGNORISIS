@@ -331,6 +331,9 @@ describe('validation of a purchase', () => {
       depotId: f.depotMain.id,
       paymentMode: 'ESPECE',
       remise: 0,
+      // Une regularisation doit desormais porter un motif choisi dans la table
+      // de reference: c'est ce qui rend un etat des pertes exploitable.
+      typeReguleId: f.typeRegule.id,
       motif: 'Inventaire',
       lines: [lineOf(f.articleA.id, f.depotMain.id, 5, 100, 0)]
     } as never);

@@ -2,13 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiRequest, ApiError, getStoredUser } from '../services/apiClient';
 import { AppShell, DjemroudLogo } from '../components/AppShell';
 import type { ScreenId } from './navigation';
-import { computeDocTotals, lineTotalHT, quantiteDepuisColis, type Emballage, type UserRole } from '@anagnorisis/shared';
+import {
+  computeDocTotals,
+  lineTotalHT,
+  quantiteDepuisColis,
+  reguleSensAutorise,
+  type Emballage,
+  type ReguleSens,
+  type UserRole
+} from '@anagnorisis/shared';
 import {
   CHARGE_CLASS_FIELDS,
   DEPOT_FIELDS,
   LIVREUR_FIELDS,
   ReferenceDataScreen,
-  TYPE_REGLEMENT_FIELDS,
+  TYPE_REGULE_FIELDS,
   ZONE_FIELDS,
   describeError
 } from '../screens/ReferenceData';
@@ -76,10 +84,13 @@ export interface ChargeClass {
   active: boolean;
 }
 
-export interface TypeReglement {
+/** Motif de régularisation de stock (casse, perte, écart d'inventaire…). */
+export interface TypeRegule {
   id: string;
   code: string;
   label: string;
+  /** Sens dans lequel le motif est utilisable. */
+  sens: ReguleSens;
   active: boolean;
 }
 
@@ -833,6 +844,7 @@ function RegulesScreen({
   articles,
   depots,
   documents,
+  typesRegules,
   onSaved
 }: {
   mode: 'REGULE_PLUS' | 'REGULE_MOINS';
@@ -840,9 +852,11 @@ function RegulesScreen({
   articles: Article[];
   depots: Depot[];
   documents: DocumentRow[];
+  typesRegules: TypeRegule[];
   onSaved: () => void;
 }) {
   const [depotId, setDepotId] = useState(depots.find((d) => d.isDefault)?.id ?? depots[0]?.id ?? '');
+  const [typeReguleId, setTypeReguleId] = useState('');
   const [motif, setMotif] = useState('');
   const [lines, setLines] = useState<SimpleMovementLine[]>([]);
   const [showArticleModal, setShowArticleModal] = useState(false);
@@ -851,6 +865,22 @@ function RegulesScreen({
 
   const isPlus = mode === 'REGULE_PLUS';
   const relevant = documents.filter((d) => d.type === mode);
+
+  /**
+   * Motifs proposés pour ce sens: une casse n'explique jamais une entrée de
+   * marchandise. Le serveur applique la même règle — la liste ne fait que
+   * l'exposer.
+   */
+  const motifsDisponibles = useMemo(
+    () => typesRegules.filter((t) => t.active !== false && reguleSensAutorise(t.sens, mode)),
+    [typesRegules, mode]
+  );
+
+  // Changer de sens peut rendre le motif choisi invalide: on le remet à zéro
+  // plutôt que d'envoyer au serveur une combinaison qu'il refusera.
+  useEffect(() => {
+    if (typeReguleId && !motifsDisponibles.some((t) => t.id === typeReguleId)) setTypeReguleId('');
+  }, [motifsDisponibles, typeReguleId]);
 
   function addArticle(art: Article) {
     setLines((prev) => {
@@ -878,6 +908,10 @@ function RegulesScreen({
       setNotice('Sélectionnez un dépôt et ajoutez au moins un article.');
       return;
     }
+    if (!typeReguleId) {
+      setNotice("Choisissez un type de régule: un écart de stock sans motif n'est plus explicable après coup.");
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -886,6 +920,7 @@ function RegulesScreen({
         body: {
           type: mode,
           depotId,
+          typeReguleId,
           motif: motif || null,
           paymentMode: 'VIREMENT',
           remise: 0,
@@ -903,6 +938,7 @@ function RegulesScreen({
       setNotice(`Régularisation ${document.reference} enregistrée et appliquée au stock.`);
       setLines([]);
       setMotif('');
+      setTypeReguleId('');
       onSaved();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Erreur lors de l'enregistrement");
@@ -953,12 +989,28 @@ function RegulesScreen({
               ))}
             </select>
           </div>
-          <div className="col-span-8">
-            <label className="block text-slate-400 font-medium mb-1 text-[11px]">MOTIF (ex: inventaire, casse, perte)</label>
+          <div className="col-span-4">
+            <label className="block text-slate-400 font-medium mb-1 text-[11px]">TYPE DE RÉGULE</label>
+            <select
+              value={typeReguleId}
+              onChange={(e) => setTypeReguleId(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20 transition"
+            >
+              <option value="">— Choisir un motif —</option>
+              {motifsDisponibles.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-4">
+            <label className="block text-slate-400 font-medium mb-1 text-[11px]">PRÉCISION (facultatif)</label>
             <input
               type="text"
               value={motif}
               onChange={(e) => setMotif(e.target.value)}
+              placeholder="ex: carton tombé en réserve"
               className="w-full border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20 transition"
             />
           </div>
@@ -2624,7 +2676,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
   const [zones, setZones] = useState<Zone[]>([]);
   const [livreurs, setLivreurs] = useState<Livreur[]>([]);
   const [chargeClasses, setChargeClasses] = useState<ChargeClass[]>([]);
-  const [typeReglements, setTypeReglements] = useState<TypeReglement[]>([]);
+  const [typesRegules, setTypesRegules] = useState<TypeRegule[]>([]);
   const [rawArticles, setRawArticles] = useState<any[]>([]);
   const [depots, setDepots] = useState<Depot[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
@@ -2695,13 +2747,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
   async function refreshAll() {
     try {
-      const [partnersRes, categoriesRes, zonesRes, livreursRes, chargeClassesRes, typeReglementsRes, articlesRes, depotsRes, documentsRes, cashRes] = await Promise.all([
+      const [partnersRes, categoriesRes, zonesRes, livreursRes, chargeClassesRes, typesRegulesRes, articlesRes, depotsRes, documentsRes, cashRes] = await Promise.all([
         apiRequest<any[]>('/partners?limit=50000'),
         apiRequest<PartnerCategoryOpt[]>('/partner-categories'),
         apiRequest<Zone[]>('/zones'),
         apiRequest<Livreur[]>('/livreurs'),
         apiRequest<ChargeClass[]>('/charge-classes'),
-        apiRequest<TypeReglement[]>('/type-reglements'),
+        apiRequest<TypeRegule[]>('/types-regules'),
         apiRequest<any[]>('/articles?limit=50000'),
         apiRequest<Depot[]>('/depots'),
         apiRequest<DocumentRow[]>('/documents'),
@@ -2714,7 +2766,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
       setZones(zonesRes);
       setLivreurs(livreursRes);
       setChargeClasses(chargeClassesRes);
-      setTypeReglements(typeReglementsRes);
+      setTypesRegules(typesRegulesRes);
       setPartners(
         partnersRes.map((p) => ({
           id: p.id,
@@ -3269,11 +3321,11 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {currentView === 'TYPE_REGULES' && (
           <ReferenceDataScreen
-            title="Types de règlement"
-            description="Conditions de paiement proposées aux partenaires (comptant, 30 jours...)."
-            endpoint="/type-reglements"
-            fields={TYPE_REGLEMENT_FIELDS}
-            rows={typeReglements}
+            title="Types des régules"
+            description="Motifs de régularisation de stock (casse, perte, écart d'inventaire…). Chaque régularisation doit en porter un: sans liste fermée, aucun état des pertes n'est exploitable."
+            endpoint="/types-regules"
+            fields={TYPE_REGULE_FIELDS}
+            rows={typesRegules}
             searchKeys={['code', 'label']}
             onRefresh={refreshAll}
           />
@@ -3454,6 +3506,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {(currentView === 'REGULES_PLUS' || currentView === 'REGULES_MOINS') && (
           <RegulesScreen
             mode={regulesMode}
+            typesRegules={typesRegules}
             onModeChange={(m) => setCurrentView(m === 'REGULE_PLUS' ? 'REGULES_PLUS' : 'REGULES_MOINS')}
             articles={articles}
             depots={depots}

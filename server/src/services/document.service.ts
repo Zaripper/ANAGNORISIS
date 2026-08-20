@@ -16,7 +16,10 @@ import {
   type Emballage,
   BP_DUREE_VALIDITE_KEY,
   dateValiditeBP,
-  parseDureeValiditeBP
+  parseDureeValiditeBP,
+  reguleSensAutorise,
+  typeReguleRequiredTypes,
+  type ReguleSens
 } from '../../../shared/src';
 import { entrerEnLot, libererLots, rendreAuxLots, reserverLots, sortirLots } from './lot.service';
 
@@ -225,6 +228,26 @@ async function computeLines(tx: Tx, lines: CreateDocumentInput['lines']): Promis
  * sans lot creerait du stock qu'aucun lot ne couvre, et la ventilation ne
  * pourrait plus jamais etre reconciliee avec le total.
  */
+/**
+ * Motif de regularisation: present, actif, et compatible avec le sens.
+ *
+ * Le controle est cote serveur et pas seulement dans la liste deroulante: un
+ * poste qui enverrait un motif "casse" sur une entree de stock produirait un
+ * etat des pertes incoherent, et l'incoherence ne serait decouverte que le jour
+ * ou quelqu'un chercherait a comprendre ses ecarts.
+ */
+async function enforceTypeRegule(tx: Tx, type: DocumentType, typeReguleId: string | null | undefined) {
+  if (!(typeReguleRequiredTypes as string[]).includes(type)) return;
+  if (!typeReguleId) throw new Error('TYPE_REGULE_REQUIRED');
+
+  const motif = await tx.typeRegule.findUnique({ where: { id: typeReguleId } });
+  if (!motif) throw new Error('TYPE_REGULE_NOT_FOUND');
+  if (!motif.active) throw new Error(`TYPE_REGULE_INACTIF:${motif.code}`);
+  if (!reguleSensAutorise(motif.sens as ReguleSens, type)) {
+    throw new Error(`TYPE_REGULE_MAUVAIS_SENS:${motif.code}`);
+  }
+}
+
 async function enforceLotsRequis(tx: Tx, type: DocumentType, lines: ComputedLine[]) {
   if (!isReceiving(type)) return;
   for (const line of lines) {
@@ -423,6 +446,7 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
     }
 
     await enforceRationing(tx, input.type, input.lines);
+    await enforceTypeRegule(tx, input.type, input.typeReguleId);
 
     const lines = await computeLines(tx, input.lines);
     await enforceLotsRequis(tx, input.type, lines);
@@ -444,6 +468,7 @@ export async function createDocument(input: CreateDocumentInput, createdById?: s
         depotId: input.depotId,
         destDepotId: input.destDepotId ?? null,
         motif: input.motif ?? null,
+        typeReguleId: input.typeReguleId ?? null,
         paymentMode: input.paymentMode,
         status: 'OUVERT',
         totalHT: summary.totalHT,
@@ -534,6 +559,7 @@ export async function updateDraftDocument(documentId: string, input: UpdateDocum
       if (!destDepot) throw new Error('DEST_DEPOT_NOT_FOUND');
     }
 
+    await enforceTypeRegule(tx, input.type, input.typeReguleId);
     const lines = await computeLines(tx, input.lines);
     await enforceLotsRequis(tx, input.type, lines);
     const summary = summarize(lines, input.remise, input.paymentMode);
@@ -549,6 +575,7 @@ export async function updateDraftDocument(documentId: string, input: UpdateDocum
         depotId: input.depotId,
         destDepotId: input.destDepotId ?? null,
         motif: input.motif ?? null,
+        typeReguleId: input.typeReguleId ?? null,
         paymentMode: input.paymentMode,
         totalHT: summary.totalHT,
         remise: input.remise,

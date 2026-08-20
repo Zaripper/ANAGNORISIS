@@ -137,13 +137,32 @@ model ChargeClass {
   charges   Charge[]
 }
 
-model TypeReglement {
-  id        String   @id @default(uuid())
-  code      String   @unique
+/// Sens dans lequel un motif de regularisation peut etre employe.
+/// Une casse ne fait jamais entrer de marchandise; un ecart d'inventaire peut
+/// aller dans les deux sens. Filtrer les motifs par sens evite d'expliquer une
+/// entree de stock par une casse.
+enum ReguleSens {
+  PLUS
+  MOINS
+  TOUS
+}
+
+/// Motifs de regularisation de stock (casse, perte, ecart d'inventaire...).
+///
+/// C'est la table de reference derriere "Fichier > Types des regules". Elle
+/// existe pour que les regularisations soient expliquees par un motif choisi
+/// dans une liste fermee plutot que par du texte libre: sans cela, "casse",
+/// "Casse", "cassé" et "carton tombé" deviennent quatre motifs distincts et
+/// aucun etat des pertes n'est possible.
+model TypeRegule {
+  id        String     @id @default(uuid())
+  code      String     @unique
   label     String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sens      ReguleSens @default(TOUS)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  documents Document[]
 }
 
 /// Key/value application settings (company identity for printed documents,
@@ -385,6 +404,11 @@ model Document {
   totalTTC           Decimal           @default(0.0)
   marginHT           Decimal           @default(0.0)
   marginPercent      Decimal           @default(0.0)
+  /// Motif de regularisation (regules uniquement), choisi dans la table de
+  /// reference. `motif` reste disponible en complement libre: le type dit
+  /// "casse", le motif precise "carton tombe en reserve".
+  typeReguleId       String?
+  typeRegule         TypeRegule?       @relation(fields: [typeReguleId], references: [id])
   motif              String?
   /// Document d'origine (facture emise depuis un bon de livraison). Quand il est
   /// renseigne, la validation n'a AUCUN effet stock ni comptable: tout a deja ete
@@ -408,6 +432,7 @@ model Document {
 
   @@index([partnerId])
   @@index([livreurId])
+  @@index([typeReguleId])
   @@index([type, status])
   @@index([createdAt])
   /// Sert au balayage des bons de preparation echus.

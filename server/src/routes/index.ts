@@ -37,7 +37,7 @@ import {
   createLivreurSchema,
   createPartnerCategorySchema,
   createPartnerSchema,
-  createTypeReglementSchema,
+  createTypeReguleSchema,
   createUserSchema,
   createZoneSchema,
   loginSchema,
@@ -53,7 +53,7 @@ import {
   updateLivreurSchema,
   updatePartnerCategorySchema,
   updatePartnerSchema,
-  updateTypeReglementSchema,
+  updateTypeReguleSchema,
   updateZoneSchema
 } from '../../../shared/src';
 import { prisma } from '../prisma';
@@ -340,23 +340,23 @@ api.put('/charge-classes/:id', requireRole('ADMINISTRATEUR'), async (req, res) =
   }
 });
 
-api.get('/type-reglements', async (_req, res) => {
-  res.json(await prisma.typeReglement.findMany({ orderBy: { label: 'asc' } }));
+api.get('/types-regules', async (_req, res) => {
+  res.json(await prisma.typeRegule.findMany({ orderBy: { label: 'asc' } }));
 });
 
-api.post('/type-reglements', requireRole('ADMINISTRATEUR'), async (req, res) => {
+api.post('/types-regules', requireRole('ADMINISTRATEUR'), async (req, res) => {
   try {
-    const input = createTypeReglementSchema.parse(req.body);
-    res.status(201).json(await prisma.typeReglement.create({ data: input }));
+    const input = createTypeReguleSchema.parse(req.body);
+    res.status(201).json(await prisma.typeRegule.create({ data: input }));
   } catch (error) {
     handleError(res, error);
   }
 });
 
-api.put('/type-reglements/:id', requireRole('ADMINISTRATEUR'), async (req, res) => {
+api.put('/types-regules/:id', requireRole('ADMINISTRATEUR'), async (req, res) => {
   try {
-    const input = updateTypeReglementSchema.parse(req.body);
-    res.json(await prisma.typeReglement.update({ where: { id: req.params.id }, data: input }));
+    const input = updateTypeReguleSchema.parse(req.body);
+    res.json(await prisma.typeRegule.update({ where: { id: req.params.id }, data: input }));
   } catch (error) {
     handleError(res, error);
   }
@@ -841,7 +841,7 @@ api.get('/backup/export', requireRole('ADMINISTRATEUR'), async (req, res) => {
     const year = Number(req.query.year) || null;
     const range = year ? { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } : undefined;
 
-    const [users, depots, categories, zones, livreurs, chargeClasses, typeReglements, partners, articles, prices, stocks, documents, lines, charges, cash, comments, settings] =
+    const [users, depots, categories, zones, livreurs, chargeClasses, typesRegules, partners, articles, prices, stocks, documents, lines, charges, cash, comments, settings] =
       await Promise.all([
         prisma.user.findMany({ select: { id: true, username: true, role: true, active: true, createdAt: true } }),
         prisma.depot.findMany(),
@@ -849,7 +849,7 @@ api.get('/backup/export', requireRole('ADMINISTRATEUR'), async (req, res) => {
         prisma.zone.findMany(),
         prisma.livreur.findMany(),
         prisma.chargeClass.findMany(),
-        prisma.typeReglement.findMany(),
+        prisma.typeRegule.findMany(),
         prisma.partner.findMany(),
         prisma.article.findMany(),
         prisma.articlePrice.findMany(),
@@ -868,7 +868,7 @@ api.get('/backup/export', requireRole('ADMINISTRATEUR'), async (req, res) => {
       exportedAt: new Date().toISOString(),
       scope: year ? { year } : 'full',
       counts: { partners: partners.length, articles: articles.length, documents: documents.length, cash: cash.length },
-      data: { users, depots, categories, zones, livreurs, chargeClasses, typeReglements, partners, articles, prices, stocks, documents, lines, charges, cash, comments, settings }
+      data: { users, depots, categories, zones, livreurs, chargeClasses, typesRegules, partners, articles, prices, stocks, documents, lines, charges, cash, comments, settings }
     });
   } catch (error) {
     handleError(res, error);
@@ -883,7 +883,7 @@ const BROWSABLE_TABLES = {
   Zone: () => prisma.zone.findMany({ take: 200 }),
   Livreur: () => prisma.livreur.findMany({ take: 200 }),
   ChargeClass: () => prisma.chargeClass.findMany({ take: 200 }),
-  TypeReglement: () => prisma.typeReglement.findMany({ take: 200 }),
+  TypeRegule: () => prisma.typeRegule.findMany({ take: 200 }),
   Partner: () => prisma.partner.findMany({ take: 200 }),
   Article: () => prisma.article.findMany({ take: 200 }),
   ArticlePrice: () => prisma.articlePrice.findMany({ take: 200 }),

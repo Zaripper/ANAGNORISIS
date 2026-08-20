@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { apiRequest } from '../services/apiClient';
-import { Badge, Button, Card, Checkbox, DataTable, Field, Input, Modal, Screen, SearchInput, ToastHost, useToasts } from '../components/ui';
+import { Badge, Button, Card, Checkbox, DataTable, Field, Input, Modal, Screen, SearchInput, Select, ToastHost, useToasts } from '../components/ui';
 import type { Column } from '../components/ui';
+import { REGULE_SENS_LABELS, type ReguleSens } from '@anagnorisis/shared';
 
 /**
  * One reusable CRUD screen for every simple reference table (Livreurs, Zones,
- * Classes de charges, Types de règlement, Dépôts).
+ * Classes de charges, Types des régules, Dépôts).
  *
  * These used to be crammed into a single "Données de base" page that could only
  * *create* rows — there was no way to correct a typo or retire an obsolete entry,
@@ -16,7 +17,9 @@ import type { Column } from '../components/ui';
 export interface RefField {
   key: string;
   label: string;
-  type: 'text' | 'boolean';
+  type: 'text' | 'boolean' | 'select';
+  /** Options d'une liste fermée (`type: 'select'`). */
+  options?: { value: string; label: string }[];
   required?: boolean;
   /** Codes are canonicalised to upper case, matching how the seed data is written. */
   uppercase?: boolean;
@@ -81,6 +84,10 @@ export function ReferenceDataScreen<T extends RefEntity>({
         if (f.type === 'boolean') {
           if (f.badgeLabel) return value ? <Badge tone="success">{f.badgeLabel}</Badge> : null;
           return value === false ? <Badge tone="neutral">Inactif</Badge> : <Badge tone="success">Actif</Badge>;
+        }
+        if (f.type === 'select') {
+          const option = f.options?.find((o) => o.value === value);
+          return <span className="text-slate-600 text-xs">{option?.label ?? '—'}</span>;
         }
         const text = value == null || value === '' ? '—' : String(value);
         return <span className={f.mono ? 'font-mono font-bold text-[#0F5B38]' : 'text-slate-800'}>{text}</span>;
@@ -200,7 +207,10 @@ function RefEntityModal<T extends RefEntity>({
     const seed: Record<string, unknown> = {};
     for (const f of fields) {
       const existing = initial ? fieldValue(initial, f.key) : undefined;
-      seed[f.key] = f.type === 'boolean' ? Boolean(existing ?? false) : ((existing as string) ?? '');
+      seed[f.key] =
+        f.type === 'boolean'
+          ? Boolean(existing ?? false)
+          : ((existing as string) ?? (f.type === 'select' ? (f.options?.[0]?.value ?? '') : ''));
     }
     // A brand new reference row is active unless the form says otherwise.
     if (!initial && fields.some((f) => f.key === 'active')) seed.active = true;
@@ -262,6 +272,19 @@ function RefEntityModal<T extends RefEntity>({
               checked={Boolean(values[f.key])}
               onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.checked }))}
             />
+          ) : f.type === 'select' ? (
+            <Field key={f.key} label={f.label} required={f.required} error={errors[f.key]}>
+              <Select
+                value={String(values[f.key] ?? '')}
+                onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+              >
+                {(f.options ?? []).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           ) : (
             <Field key={f.key} label={f.label} required={f.required} error={errors[f.key]}>
               <Input
@@ -302,9 +325,22 @@ export const CHARGE_CLASS_FIELDS: RefField[] = [
   { key: 'active', label: 'Active', type: 'boolean' }
 ];
 
-export const TYPE_REGLEMENT_FIELDS: RefField[] = [
-  { key: 'code', label: 'Code', type: 'text', required: true, uppercase: true, mono: true, placeholder: 'ex: 30J' },
-  { key: 'label', label: 'Libellé', type: 'text', required: true, placeholder: 'ex: Paiement à 30 jours' },
+/**
+ * Motifs de régularisation de stock.
+ *
+ * Le sens restreint le motif à l'opération qui a du sens: une casse n'explique
+ * jamais une entrée de marchandise. Sans cette contrainte, un état des pertes
+ * mélange des écarts qui n'ont rien à voir.
+ */
+export const TYPE_REGULE_FIELDS: RefField[] = [
+  { key: 'code', label: 'Code', type: 'text', required: true, uppercase: true, mono: true, placeholder: 'ex: CASSE' },
+  { key: 'label', label: 'Libellé', type: 'text', required: true, placeholder: 'ex: Casse' },
+  {
+    key: 'sens',
+    label: 'Sens autorisé',
+    type: 'select',
+    options: (Object.keys(REGULE_SENS_LABELS) as ReguleSens[]).map((v) => ({ value: v, label: REGULE_SENS_LABELS[v] }))
+  },
   { key: 'active', label: 'Actif', type: 'boolean' }
 ];
 

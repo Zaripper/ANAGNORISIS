@@ -614,14 +614,43 @@ export type CreateChargeClassInput = z.infer<typeof createChargeClassSchema>;
 export const updateChargeClassSchema = createChargeClassSchema.partial();
 export type UpdateChargeClassInput = z.infer<typeof updateChargeClassSchema>;
 
-export const createTypeReglementSchema = z.object({
+// ---------- Types des régules (motifs de régularisation de stock) ----------
+export const reguleSensValues = ['PLUS', 'MOINS', 'TOUS'] as const;
+export type ReguleSens = (typeof reguleSensValues)[number];
+
+export const REGULE_SENS_LABELS: Record<ReguleSens, string> = {
+  PLUS: 'Entrée seulement',
+  MOINS: 'Sortie seulement',
+  TOUS: 'Les deux sens'
+};
+
+/**
+ * Un motif est-il utilisable dans ce sens ?
+ *
+ * Une casse ne fait jamais entrer de marchandise, un don reçu n'en fait jamais
+ * sortir. Restreindre la liste au sens de l'opération évite d'expliquer une
+ * entrée de stock par une casse — le genre d'incohérence qui rend un état des
+ * pertes inexploitable.
+ */
+export function reguleSensAutorise(sens: ReguleSens, type: DocumentType): boolean {
+  if (sens === 'TOUS') return true;
+  if (type === 'REGULE_PLUS') return sens === 'PLUS';
+  if (type === 'REGULE_MOINS') return sens === 'MOINS';
+  return false;
+}
+
+/** Les seuls documents qui exigent un motif de régularisation. */
+export const typeReguleRequiredTypes: DocumentType[] = ['REGULE_PLUS', 'REGULE_MOINS'];
+
+export const createTypeReguleSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
+  sens: z.enum(reguleSensValues).default('TOUS'),
   active: z.boolean().default(true)
 });
-export type CreateTypeReglementInput = z.infer<typeof createTypeReglementSchema>;
-export const updateTypeReglementSchema = createTypeReglementSchema.partial();
-export type UpdateTypeReglementInput = z.infer<typeof updateTypeReglementSchema>;
+export type CreateTypeReguleInput = z.infer<typeof createTypeReguleSchema>;
+export const updateTypeReguleSchema = createTypeReguleSchema.partial();
+export type UpdateTypeReguleInput = z.infer<typeof updateTypeReguleSchema>;
 
 export const createCommentSchema = z.object({
   entityType: z.string().min(1),
@@ -693,6 +722,8 @@ export const createDocumentSchema = z
     destDepotId: z.string().uuid().optional().nullable(),
     supplierInvoiceNum: z.string().optional().nullable(),
     motif: z.string().optional().nullable(),
+    /** Motif de régularisation, obligatoire sur les régules (voir superRefine). */
+    typeReguleId: z.string().uuid().optional().nullable(),
     paymentMode: z.enum(paymentModes).default('ESPECE'),
     remise: z.number().nonnegative().default(0),
     lines: z.array(documentLineInputSchema).min(1)
@@ -700,6 +731,12 @@ export const createDocumentSchema = z
   .superRefine((data, ctx) => {
     if ((partnerRequiredTypes as string[]).includes(data.type) && !data.partnerId) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['partnerId'], message: 'PARTNER_REQUIRED_FOR_TYPE' });
+    }
+    // Une régularisation sans motif est un écart de stock que personne ne peut
+    // expliquer après coup — exactement ce que la table de référence existe
+    // pour empêcher.
+    if ((typeReguleRequiredTypes as string[]).includes(data.type) && !data.typeReguleId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['typeReguleId'], message: 'TYPE_REGULE_REQUIRED' });
     }
     if (data.type === 'TRANSFERT') {
       if (!data.destDepotId) {
