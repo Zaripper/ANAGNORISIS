@@ -107,6 +107,34 @@ debugging anything else.
 npm run build
 ```
 
+### 5. Live smoke test (optional)
+
+`server/scripts/` holds three scripts that exercise a **running** server against
+whatever database it is pointed at:
+
+```bash
+npx tsx scripts/diagnostic.ts
+```
+
+Read-only. Reconciles every lot-tracked article's stock against the sum of its
+lots, flags stock reserved by no open document, and prints partner balances.
+Safe to run any time, including on production.
+
+```bash
+SMOKE_LIVE=1 npx tsx scripts/smoke-live.ts
+SMOKE_LIVE=1 npx tsx scripts/smoke-live-concurrence.ts
+```
+
+These **write**. They create `AUDIT-TMP` entities, play full lifecycles
+(purchase with lot and free goods, FEFO sale, expired-lot refusal, inter-depot
+transfer, régule, cash entry, cheque, prep-slip expiry, concurrent validations,
+role enforcement), then delete everything and assert the before/after snapshot
+is byte-identical. They refuse to start without `SMOKE_LIVE=1` so they cannot be
+launched by accident.
+
+Deleting the test documents reclaims their reference numbers, so no gap is left
+in the fiscal numbering.
+
 Builds through `vite.electron.config.ts`, so `dist/` (web assets) and
 `dist-electron/` (`main.js`, `preload.js`) are both produced.
 
