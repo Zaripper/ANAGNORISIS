@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * Shared UI primitives for the whole application.
@@ -181,6 +181,40 @@ export function Checkbox({ label, ...rest }: React.InputHTMLAttributes<HTMLInput
       {label}
     </label>
   );
+}
+
+/**
+ * Filtre une liste sur du texte libre.
+ *
+ * Regroupe ici parce que la meme mecanique (etat, normalisation, inclusion sur
+ * plusieurs champs) etait recopiee dans chaque ecran, et qu'un ecran sur deux
+ * l'oubliait purement et simplement. La comparaison est insensible a la casse
+ * ET aux accents: chercher "perime" doit trouver "périmé", sinon le champ ne
+ * sert a rien sur un catalogue francais.
+ */
+export function useTextFilter<T>(rows: T[], champs: (row: T) => (string | number | null | undefined)[]) {
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = normaliser(search);
+    if (!q) return rows;
+    return rows.filter((row) =>
+      champs(row).some((v) => (v === null || v === undefined ? false : normaliser(String(v)).includes(q)))
+    );
+    // `champs` est une lambda recreee a chaque rendu: la lister ferait recalculer
+    // le filtre en permanence sans rien changer au resultat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, search]);
+
+  return { search, setSearch, filtered };
+}
+
+/** Minuscules sans accents, pour que la recherche se comporte comme on l'attend. */
+export function normaliser(v: string) {
+  return v
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
 }
 
 /** Debounced-feel search box with a magnifier affordance and clear button. */

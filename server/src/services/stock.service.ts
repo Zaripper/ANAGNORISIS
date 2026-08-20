@@ -70,6 +70,13 @@ export async function stockALaDate(date: Date): Promise<LigneStockHistorique[]> 
     where: {
       validatedAt: { not: null },
       status: { in: ['VALIDE', 'ANNULE'] },
+      /**
+       * Une facture emise depuis un bon de livraison n'a JAMAIS touche le
+       * stock: le BL l'avait deja sorti. La defaire rendrait au stock une
+       * quantite qui n'en etait pas sortie, et toute date passee serait
+       * surevaluee du montant de la facture.
+       */
+      sourceDocumentId: null,
       OR: [
         // Valides apres la date: a retrancher.
         { status: 'VALIDE', validatedAt: { gt: limite } },
@@ -99,15 +106,21 @@ export async function stockALaDate(date: Date): Promise<LigneStockHistorique[]> 
     for (const ligne of doc.lines) {
       const quantite = lineStockQuantity(ligne);
 
+      /**
+       * `effet` est ce que le document a fait au stock au moment de sa
+       * validation; la correction vaut `sens * effet`. Ecrire directement le
+       * signe corrige ici serait le negatif du negatif: une entree defaite
+       * ajouterait de la marchandise au lieu d'en retirer.
+       */
       if (type === 'TRANSFERT') {
         if (!doc.destDepotId) continue;
         // Un transfert retire au depot de depart et ajoute a celui d'arrivee.
-        ajuster(ligne.articleId, ligne.depotId, sens * quantite);
-        ajuster(ligne.articleId, doc.destDepotId, sens * -quantite);
-      } else if (estReceptrice(type)) {
         ajuster(ligne.articleId, ligne.depotId, sens * -quantite);
-      } else if (estConsommatrice(type)) {
+        ajuster(ligne.articleId, doc.destDepotId, sens * quantite);
+      } else if (estReceptrice(type)) {
         ajuster(ligne.articleId, ligne.depotId, sens * quantite);
+      } else if (estConsommatrice(type)) {
+        ajuster(ligne.articleId, ligne.depotId, sens * -quantite);
       }
       // PROFORMA, COMMANDE: aucun effet stock, ni hier ni aujourd'hui.
     }

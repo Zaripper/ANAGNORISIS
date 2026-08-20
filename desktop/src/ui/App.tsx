@@ -29,10 +29,12 @@ import {
   Input,
   Modal,
   Screen,
+  SearchInput,
   Select,
   ToastHost,
   statusChipClasses,
   statusLabel,
+  useTextFilter,
   useToasts
 } from '../components/ui';
 import { POSScreen } from '../screens/POS';
@@ -50,6 +52,7 @@ import { PartenairesFichierScreen } from '../screens/PartenairesFichier';
 import { ChequesScreen } from '../screens/Cheques';
 import { SaisieCaisseScreen } from '../screens/SaisieCaisse';
 import { LotsScreen } from '../screens/Lots';
+import { StocksScreen } from '../screens/Stocks';
 import { CompanySettings, invoiceHtml, printHtml } from '../services/print';
 
 // ==========================================
@@ -1905,8 +1908,9 @@ function SuiviPartenaireScreen({ partners }: { partners: Partner[] }) {
  * (créance); a supplier category with a positive balance is money WE owe (dette).
  */
 function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
-  const creances = partners.filter((p) => !p.categoryIsSupplier && p.balance > 0).sort((a, b) => b.balance - a.balance);
-  const dettes = partners.filter((p) => p.categoryIsSupplier && p.balance > 0).sort((a, b) => b.balance - a.balance);
+  const { search, setSearch, filtered } = useTextFilter(partners, (p) => [p.code, p.raisonSociale]);
+  const creances = filtered.filter((p) => !p.categoryIsSupplier && p.balance > 0).sort((a, b) => b.balance - a.balance);
+  const dettes = filtered.filter((p) => p.categoryIsSupplier && p.balance > 0).sort((a, b) => b.balance - a.balance);
   const totalCreances = creances.reduce((acc, p) => acc + p.balance, 0);
   const totalDettes = dettes.reduce((acc, p) => acc + p.balance, 0);
 
@@ -1930,7 +1934,7 @@ function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
               <td className="p-2 px-3 text-right font-mono font-bold">{p.balance.toFixed(2)} DZD</td>
             </tr>
           ))}
-          {rows.length === 0 && (
+          {filtered.length === 0 && (
             <tr>
               <td colSpan={4} className="p-6 text-center text-slate-400">
                 {emptyLabel}
@@ -1958,6 +1962,11 @@ function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
         </div>
       </div>
 
+      <div className="bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-xs shrink-0">
+        <div className="max-w-sm">
+          <SearchInput value={search} onChange={setSearch} placeholder="Code ou raison sociale…" />
+        </div>
+      </div>
       <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
         <div className="bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
           <div className="px-3 py-2 text-[11px] font-bold text-emerald-700 uppercase tracking-wider border-b border-slate-100">Créances</div>
@@ -1974,7 +1983,8 @@ function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
 
 /** Liste des partenaires bloqués — anyone with a credit limit set who has exceeded it. */
 function PartenairesBloquesScreen({ partners }: { partners: Partner[] }) {
-  const blocked = partners
+  const { search, setSearch, filtered } = useTextFilter(partners, (p) => [p.code, p.raisonSociale]);
+  const blocked = filtered
     .filter((p) => p.seuilAutorise > 0 && p.balance > p.seuilAutorise)
     .sort((a, b) => b.balance - b.seuilAutorise - (a.balance - a.seuilAutorise));
 
@@ -1983,6 +1993,11 @@ function PartenairesBloquesScreen({ partners }: { partners: Partner[] }) {
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
         <span className="font-extrabold text-slate-900 text-base">Liste des Partenaires Bloqués</span>
         <p className="text-slate-400 text-[11px] mt-1">Partenaires dont le solde dépasse le seuil de crédit autorisé.</p>
+      </div>
+      <div className="bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-xs shrink-0">
+        <div className="max-w-sm">
+          <SearchInput value={search} onChange={setSearch} placeholder="Code ou raison sociale…" />
+        </div>
       </div>
       <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
@@ -2023,7 +2038,8 @@ function PartenairesBloquesScreen({ partners }: { partners: Partner[] }) {
 
 /** Créances à recouvrer — client debts specifically, sorted by amount, for collections follow-up. */
 function CreancesARecouvrerScreen({ partners }: { partners: Partner[] }) {
-  const rows = partners.filter((p) => !p.categoryIsSupplier && p.balance > 0).sort((a, b) => b.balance - a.balance);
+  const { search, setSearch, filtered } = useTextFilter(partners, (p) => [p.code, p.raisonSociale]);
+  const rows = filtered.filter((p) => !p.categoryIsSupplier && p.balance > 0).sort((a, b) => b.balance - a.balance);
   const total = rows.reduce((acc, p) => acc + p.balance, 0);
 
   return (
@@ -2035,6 +2051,12 @@ function CreancesARecouvrerScreen({ partners }: { partners: Partner[] }) {
           <span className="font-mono font-bold text-[#0F5B38]">{total.toFixed(2)} DZD</span>
         </div>
       </div>
+      <div className="bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-xs shrink-0">
+        <div className="max-w-sm">
+          <SearchInput value={search} onChange={setSearch} placeholder="Code ou raison sociale…" />
+        </div>
+      </div>
+
       <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
@@ -2255,6 +2277,7 @@ interface VenteArticleRow {
 function VentesArticlesScreen() {
   const [rows, setRows] = useState<VenteArticleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const { search, setSearch, filtered } = useTextFilter(rows, (r) => [r.code, r.designation]);
 
   useEffect(() => {
     apiRequest<VenteArticleRow[]>('/reports/ventes-articles?limit=50')
@@ -2262,7 +2285,7 @@ function VentesArticlesScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const maxQty = Math.max(1, ...rows.map((r) => Math.abs(r.quantity)));
+  const maxQty = Math.max(1, ...filtered.map((r) => Math.abs(r.quantity)));
 
   return (
     <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
@@ -2270,6 +2293,12 @@ function VentesArticlesScreen() {
         <span className="font-extrabold text-slate-900 text-base">Ventes d'Articles</span>
         <p className="text-slate-400 text-[11px] mt-1">Quantités et chiffre d'affaires net (ventes moins avoirs) par article.</p>
       </div>
+      <div className="bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-xs shrink-0">
+        <div className="max-w-sm">
+          <SearchInput value={search} onChange={setSearch} placeholder="Code ou désignation…" />
+        </div>
+      </div>
+
       <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
         {loading ? (
           <div className="p-8 text-center text-slate-400 text-xs">Chargement...</div>
@@ -3528,54 +3557,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         {currentView === 'AFFICHAGE_TABLES' && <TablesScreen />}
 
         {/* ---------- STOCKS ---------- */}
-        {currentView === 'STOCKS' && (
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-              <span className="font-extrabold text-slate-900 text-base">Consultation des Stocks</span>
-            </div>
-            <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
-                  <tr>
-                    <th className="p-3">Code</th>
-                    <th className="p-3">Désignation</th>
-                    {depots.map((d) => (
-                      <th key={d.id} className="p-3 text-center">
-                        {d.name}
-                      </th>
-                    ))}
-                    <th className="p-3 text-center">Total Disponible</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {articles.map((a) => (
-                    <tr key={a.id}>
-                      <td className="p-3 font-mono font-bold text-slate-900">{a.code}</td>
-                      <td className="p-3 font-medium text-slate-800">{a.designation}</td>
-                      {depots.map((d) => {
-                        const s = a.stocksByDepot[d.id];
-                        const available = s ? s.qtyInStock - s.qtyReserved : 0;
-                        return (
-                          <td key={d.id} className="p-3 text-center font-mono">
-                            {s ? `${available} / ${s.qtyInStock}` : '—'}
-                          </td>
-                        );
-                      })}
-                      <td className="p-3 text-center font-mono font-bold text-[#0F5B38]">{a.stockGlobal}</td>
-                    </tr>
-                  ))}
-                  {articles.length === 0 && (
-                    <tr>
-                      <td colSpan={3 + depots.length} className="p-8 text-center text-slate-400">
-                        Aucun article.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {currentView === 'STOCKS' && <StocksScreen />}
 
         {/* ---------- REGULES (stock corrections) ---------- */}
         {(currentView === 'REGULES_PLUS' || currentView === 'REGULES_MOINS') && (

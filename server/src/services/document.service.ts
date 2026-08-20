@@ -706,9 +706,24 @@ export async function validateDocument(documentId: string, validatedById?: strin
     });
 
     for (const line of document.lines) {
-      const stock = await tx.articleStock.findUnique({
+      let stock = await tx.articleStock.findUnique({
         where: { articleId_depotId: { articleId: line.articleId, depotId: line.depotId } }
       });
+
+      /**
+       * Un article cree depuis Fichier > Articles n'a aucune ligne de stock: la
+       * fiche ne dit pas dans quel depot il se trouve, il n'y est pas encore.
+       * Sa premiere reception doit donc creer la ligne, sinon l'article est
+       * inutilisable — creable, mais impossible a rentrer en stock.
+       *
+       * Uniquement pour les entrees: une sortie sur une ligne inexistante veut
+       * bien dire qu'il n'y a rien a sortir, et doit echouer.
+       */
+      if (!stock && isReceiving(type)) {
+        stock = await tx.articleStock.create({
+          data: { articleId: line.articleId, depotId: line.depotId, qtyInStock: 0, qtyReserved: 0 }
+        });
+      }
       if (!stock) throw new Error('STOCK_NOT_FOUND');
       const article = await tx.article.findUnique({ where: { id: line.articleId } });
       if (!article) throw new Error('ARTICLE_NOT_FOUND');

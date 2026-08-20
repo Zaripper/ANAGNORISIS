@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import bcrypt from 'bcryptjs';
 import { cancelCashEntry, createCashEntry, validateCashEntry } from '../services/caisse.service';
 import { alerteJours, listerLots, valeurLotsPerimes } from '../services/lot.service';
+import { consultationStocks } from '../services/stock.service';
 import {
   buildDocumentPreview,
   cancelDocument,
@@ -455,10 +456,6 @@ api.put('/depots/:id', requireRole('ADMINISTRATEUR'), async (req, res) => {
 });
 
 // ---------- Stock ----------
-api.get('/stocks', async (_req, res) => {
-  res.json(await prisma.articleStock.findMany({ include: { article: true, depot: true } }));
-});
-
 // ---------- Documents ----------
 api.post('/documents/preview', async (req, res) => {
   try {
@@ -545,6 +542,27 @@ api.post('/documents/expire-bons-preparation', async (_req, res) => {
   try {
     const liberes = await expireBonsPreparation();
     res.json({ liberes, count: liberes.length });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// ---------- Consultation des stocks ----------
+/**
+ * `?date=YYYY-MM-DD` reconstitue le stock tel qu'il etait a la fin de ce jour.
+ * Sans parametre, l'etat courant (avec les quantites reservees, qui n'ont de
+ * sens qu'au present).
+ */
+api.get('/stocks', async (req, res) => {
+  try {
+    const brut = typeof req.query.date === 'string' ? req.query.date.trim() : '';
+    let date: Date | undefined;
+    if (brut) {
+      const d = new Date(brut);
+      if (Number.isNaN(d.getTime())) throw new Error('INVALID_DATE');
+      date = d;
+    }
+    res.json(await consultationStocks(date));
   } catch (error) {
     handleError(res, error);
   }

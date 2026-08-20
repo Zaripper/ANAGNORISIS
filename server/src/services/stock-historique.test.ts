@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../prisma';
 import { resetDatabase, seedFixtures, stockOf, type Fixtures } from '../../test/fixtures';
-import { cancelDocument, createDocument, validateDocument } from './document.service';
+import { cancelDocument, createDocument, factureFromBonLivraison, validateDocument } from './document.service';
 import { stockALaDate } from './stock.service';
 
 /**
@@ -214,6 +214,33 @@ describe('cas particuliers', () => {
     const a = await achat(50);
     await dater(a.id, jour(1));
     expect(await qteALaDate(jour(-365))).toBe(100);
+  });
+});
+
+describe('documents sans effet stock', () => {
+  it("une facture emise depuis un bon de livraison n'est pas comptee deux fois", async () => {
+    // Le BL sort la marchandise; la facture qui en decoule est inerte. La
+    // reconstruction doit l'ignorer, sinon defaire une date passee rendrait au
+    // stock une quantite qui n'en etait jamais sortie.
+    const bl = await createDocument({
+      type: 'BON_LIVRAISON',
+      partnerId: f.client.id,
+      depotId: f.depotMain.id,
+      paymentMode: 'CHEQUE',
+      remise: 0,
+      lines: [{ articleId: f.articleA.id, depotId: f.depotMain.id, quantity: 10, unitPriceHT: 150, discountPercent: 0, tvaRate: 19 }]
+    } as never);
+    await validateDocument(bl.id);
+    await dater(bl.id, jour(10));
+
+    const facture = await factureFromBonLivraison(bl.id);
+    await dater(facture.id, jour(10));
+
+    // Apres: 100 - 10 = 90, et le stock reel le confirme.
+    expect((await stockOf(f.articleA.id, f.depotMain.id)).qtyInStock).toBe(90);
+    expect(await qteALaDate(jour(15))).toBe(90);
+    // Avant: 100, et surtout pas 110.
+    expect(await qteALaDate(jour(5))).toBe(100);
   });
 });
 
