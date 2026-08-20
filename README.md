@@ -107,6 +107,13 @@ debugging anything else.
 npm run build
 ```
 
+Builds through `vite.electron.config.ts`, so `dist/` (web assets) and
+`dist-electron/` (`main.js`, `preload.js`) are both produced.
+
+Default seeded login: `admin` / `admin123` — **change this before any real use.**
+The development database on this machine uses a password that was already
+changed; the seed value only applies to a freshly seeded database.
+
 ### 5. Live smoke test (optional)
 
 `server/scripts/` holds three scripts that exercise a **running** server against
@@ -135,11 +142,6 @@ launched by accident.
 Deleting the test documents reclaims their reference numbers, so no gap is left
 in the fiscal numbering.
 
-Builds through `vite.electron.config.ts`, so `dist/` (web assets) and
-`dist-electron/` (`main.js`, `preload.js`) are both produced.
-
-Default seeded login: `admin` / `admin123` — **change this before any real use.**
-
 ---
 
 ## Navigation
@@ -161,10 +163,11 @@ landing page. Press <kbd>Ctrl</kbd>+<kbd>K</kbd> to jump to any screen by name
 
 Implemented and working against real data:
 
-- **Fichier** — Partenaires, Catégories de partenaires, Articles, Dépôts, Livreurs, Zones, Classes de charges, Types de règlement
+- **Fichier** — Partenaires, Catégories de partenaires, Articles (dont suivi par lot), Dépôts, Livreurs, Zones, Classes de charges, **Types des régules** (motifs de régularisation: casse, perte, écart d'inventaire…)
 - **Mouvement** — **Caisse POS (vente comptoir avec scan code-barres + ticket 80mm)**, Saisie des achats, Commandes fournisseurs (avec réception → achat validé), Bons de préparation, Validation des bons, Ventes, Factures, Proformas, Avoirs achats/ventes, Régules ±, Transferts inter-dépôts, Charges
-- **Trésorerie** — Chèques reçus/émis, Virements, Journal de caisse, Journal de banque, Transactions caissières
-- **Consultation** — Stocks, Prix d'articles, États des articles, Mouvement d'un article, Articles à réapprovisionner (seuils éditables), Consultation des achats, Liste des bons, Archive, Suivi d'un partenaire, Créances et dettes, Créances à recouvrer, Partenaires bloqués
+- **Mouvement (suite)** — **Saisie et validation des achats** (file de validation), **Saisie de la caisse et validation** (écriture en brouillon sans effet sur les soldes jusqu'à validation)
+- **Trésorerie** — Chèques reçus/émis **avec cycle de vie** (en instance → mis en paiement → payé / annulé), Virements, Journal de caisse, Journal de banque, Transactions caissières
+- **Consultation** — **Lots et péremptions** (FEFO, valeur immobilisée dans les lots périmés), Stocks, Prix d'articles, États des articles, Mouvement d'un article, Articles à réapprovisionner (seuils éditables), Consultation des achats, Liste des bons, Archive, Suivi d'un partenaire, Créances et dettes, Créances à recouvrer, Partenaires bloqués
 - **Analyse** — Tableau de bord, Chiffre d'affaires, Chiffre d'affaires par agent, Ventes d'articles
 - **Fiscal** — État 104/Timbre, Déclaration TVA, Déclaration TAP, État G50 — *documents de travail pour le comptable, explicitement non contractuels*
 - **Outils** — Gestion des utilisateurs (rôles, protection dernier admin), Paramètres (identité société sur les impressions), Inventaire physique (écarts → régules validées)
@@ -173,11 +176,12 @@ Printing: every commercial document has an **Imprimer** button (A4 with totals i
 French words per Algerian practice); the POS prints an 80mm thermal ticket with
 cash received / change due.
 
-Not yet built (visible in the UI, marked *à venir*):
+Not yet built (visible in the UI but dimmed). This list is derived from the
+`implemented: false` entries in the navigation registry — if it drifts, the
+registry is the truth:
 
-- **Consultation** — Situation
-- **Analyse** — Graphes et indices
-- **Outils** — Sauvegarde/Restauration, Archivage, Montants de blocage, Réorganisation des stocks, Affichage des tables, Impression (modèles avancés)
+- **Consultation** — État G50
+- **Outils** — Restauration d'une base, Modification, Réorganisation des stocks, Imprimante (modèles avancés)
 
 > **Note on the Fiscal group.** État 104, TVA, TAP and G50 are real Algerian tax
 > filings. The screens here are **working papers to hand to an accountant** — each
