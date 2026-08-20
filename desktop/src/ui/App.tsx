@@ -2907,6 +2907,18 @@ export default function App({ onLogout }: { onLogout: () => void }) {
     setLines(lines.filter((l) => l.id !== id).map((l, idx) => ({ ...l, num: idx + 1 })));
   };
 
+  /**
+   * Prix unitaire propose a l'ajout d'une ligne.
+   *
+   * Sur un achat, proposer le prix de VENTE serait une faute lourde: c'est ce
+   * prix qui sert de cout d'entree, donc il rebaserait le P.U.M.P sur le prix
+   * de vente. Le stock serait valorise au prix public et toutes les marges
+   * ulterieures tomberaient a zero. On part donc du P.U.M.P connu, la meilleure
+   * estimation du cout d'achat, a charge pour l'operateur de saisir le prix
+   * reel de la facture fournisseur.
+   */
+  const prixParDefaut = (art: Article) => (isPurchaseView ? art.pump : art.priceHT);
+
   const handleAddArticleToDoc = (art: Article) => {
     const depot = depots.find((d) => d.id === selectedDepotId);
     const newLine: DocLine = {
@@ -2919,9 +2931,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
       designation: art.designation,
       qte: 1,
       pump: art.pump,
-      prixVente: art.priceHT,
+      prixVente: prixParDefaut(art),
       remisePercent: 0,
-      montantHT: art.priceHT,
+      montantHT: prixParDefaut(art),
       tvaRate: art.tvaRate,
       emballage: 'VRAC',
       nbColis: null,
@@ -2946,9 +2958,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         designation: art.designation,
         qte: qty,
         pump: art.pump,
-        prixVente: art.priceHT,
+        prixVente: prixParDefaut(art),
         remisePercent: 0,
-        montantHT: qty * art.priceHT,
+        montantHT: qty * prixParDefaut(art),
         tvaRate: art.tvaRate,
         emballage: 'VRAC',
         nbColis: null,
@@ -3637,7 +3649,9 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                     onChange={(e) => setPaymentType(e.target.value as typeof paymentType)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20 transition"
                   >
-                    <option value="ESPECE">Espèce (Timbre Fiscal 1%)</option>
+                    {/* Le timbre est progressif (1 % / 1,5 % / 2 % selon le TTC): ne pas
+                        annoncer un taux fixe, qui serait faux au-delà de 30 000 DZD. */}
+                    <option value="ESPECE">Espèce (avec timbre fiscal)</option>
                     <option value="CHEQUE">Chèque</option>
                     <option value="TRAITE">Traite</option>
                     <option value="VIREMENT">Virement Bancaire</option>
@@ -3698,11 +3712,11 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                       <th className="p-3">Désignation Produit</th>
                       <th className="p-3 text-center w-24">Emballage</th>
                       <th className="p-3 text-center w-20">Qté</th>
-                      <th className="p-3 text-center w-20" title="Quantité offerte: sort du stock, non facturée">
-                        Bonus
+                      <th className="p-3 text-center w-20" title="Unités gratuites: sortent du stock, ne sont pas facturées">
+                        UG
                       </th>
                       <th className="p-3 text-right w-24">P.U.M.P.</th>
-                      <th className="p-3 text-right w-28">Prix Vente</th>
+                      <th className="p-3 text-right w-28">{isPurchaseView ? "Prix d'achat" : 'Prix Vente'}</th>
                       <th className="p-3 text-right w-24">Ristourne</th>
                       <th className="p-3 text-right w-28">Montant HT</th>
                       <th className="p-3 text-center w-16">TVA</th>
@@ -3801,13 +3815,32 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                                 value={line.quantiteBonus}
                                 onChange={(e) => updateLine(line.id, { quantiteBonus: Math.max(0, parseInt(e.target.value) || 0) })}
                                 className="w-14 text-center border border-slate-200 rounded-lg font-mono py-1 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
-                                aria-label={`Quantité bonus pour ${line.code}`}
-                                title="Marchandise offerte: sort du stock, non facturée"
+                                aria-label={`Unités gratuites pour ${line.code}`}
+                                title="Unités gratuites: sortent du stock, ne sont pas facturées"
                               />
                             )}
                           </td>
                           <td className="p-3 text-right font-mono text-slate-400">{line.pump.toFixed(2)}</td>
-                          <td className="p-3 text-right font-mono font-semibold text-slate-800">{line.prixVente.toFixed(2)}</td>
+                          {/*
+                            Le prix unitaire doit rester saisissable. Sur un achat il change
+                            a chaque facture fournisseur, et c'est lui qui rebase le P.U.M.P:
+                            ne pas pouvoir le corriger obligeait a saisir l'achat ailleurs.
+                          */}
+                          <td className="p-3 text-right">
+                            {isReadOnly ? (
+                              <span className="font-mono font-semibold text-slate-800">{line.prixVente.toFixed(2)}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={line.prixVente}
+                                onChange={(e) => updateLine(line.id, { prixVente: Math.max(0, parseFloat(e.target.value) || 0) })}
+                                className="w-24 text-right border border-slate-200 rounded-lg font-mono font-semibold py-1 px-1.5 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
+                                aria-label={`${isPurchaseView ? "Prix d'achat" : 'Prix de vente'} pour ${line.code}`}
+                              />
+                            )}
+                          </td>
                           <td className="p-3 text-right">
                             {isReadOnly ? (
                               <span className="font-mono text-slate-500">{line.ristourne.toFixed(2)}</span>
@@ -3874,12 +3907,19 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                   <span className="text-slate-400 font-medium block text-[11px]">TIMBRE FISCAL</span>
                   <span className="text-sm font-bold text-amber-700 font-mono">{totalTimbre.toFixed(2)} DZD</span>
                 </div>
-                <div className="border-l border-slate-200 pl-8">
-                  <span className="text-slate-400 font-medium block text-[11px]">MARGE COMMERCIALE</span>
-                  <span className="text-xs font-bold text-[#0F5B38] font-mono">
-                    {totalMargeDZD.toFixed(2)} DZD ({margePercent.toFixed(1)}%)
-                  </span>
-                </div>
+                {/*
+                  La marge n'a de sens que sur une vente. Sur un achat, la formule
+                  compare le prix d'achat au P.U.M.P et sort un pourcentage negatif
+                  qui n'a aucune signification commerciale.
+                */}
+                {!isPurchaseView && (
+                  <div className="border-l border-slate-200 pl-8">
+                    <span className="text-slate-400 font-medium block text-[11px]">MARGE COMMERCIALE</span>
+                    <span className="text-xs font-bold text-[#0F5B38] font-mono">
+                      {totalMargeDZD.toFixed(2)} DZD ({margePercent.toFixed(1)}%)
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-4">
