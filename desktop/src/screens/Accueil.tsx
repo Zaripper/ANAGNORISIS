@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Check, Pencil, X, type LucideIcon } from 'lucide-react';
 import { DjemroudLogo } from '../components/AppShell';
 import { Button } from '../components/ui';
-import { MODULE_META, visibleScreens, type ScreenId } from '../ui/navigation';
-import type { UserRole } from '@anagnorisis/shared';
+import { MODULE_META, visibleScreens, type ScreenId, type UtilisateurAcces } from '../ui/navigation';
 
 /**
  * Accueil — écran d'ouverture, personnalisable.
@@ -40,11 +39,11 @@ function lire(username?: string): ScreenId[] {
 
 export function AccueilScreen({
   username,
-  role,
+  user,
   onNavigate
 }: {
   username?: string;
-  role?: UserRole;
+  user?: UtilisateurAcces;
   onNavigate: (id: ScreenId) => void;
 }) {
   const [raccourcis, setRaccourcis] = useState<ScreenId[]>(() => lire(username));
@@ -55,7 +54,7 @@ export function AccueilScreen({
   const salutation = heure < 13 ? 'Bonjour' : heure < 18 ? 'Bon après-midi' : 'Bonsoir';
 
   // Seuls les écrans réellement accessibles à ce rôle peuvent devenir un raccourci.
-  const disponibles = useMemo(() => visibleScreens(role).filter((s) => s.implemented && s.group !== 'Accueil'), [role]);
+  const disponibles = useMemo(() => visibleScreens(user).filter((s) => s.implemented && s.group !== 'Accueil'), [user]);
 
   const choisis = useMemo(
     () => raccourcis.map((id) => disponibles.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s),

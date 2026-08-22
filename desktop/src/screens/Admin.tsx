@@ -1,7 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { visibleScreens, type ScreenDef } from '../ui/navigation';
 import { BP_DUREE_VALIDITE_KEY, LOT_ALERTE_KEY, type UserRole } from '@anagnorisis/shared';
 import { apiRequest } from '../services/apiClient';
-import { Badge, Button, Card, DataTable, Field, Input, Modal, Screen, Select, ToastHost, dateShort, useToasts } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  DataTable,
+  Field,
+  Input,
+  Modal,
+  Screen,
+  Select,
+  ToastHost,
+  dateShort,
+  useToasts
+} from '../components/ui';
 import { describeError } from './ReferenceData';
 import { CompanySettings } from '../services/print';
 
@@ -13,6 +28,9 @@ interface UserRow {
   username: string;
   role: UserRole;
   active: boolean;
+  /** Droits réglés écran par écran plutôt que déduits du rôle. */
+  accesPersonnalise: boolean;
+  screenAccess: string[];
   createdAt: string;
 }
 
@@ -28,6 +46,7 @@ export function UsersScreen({ currentUserId }: { currentUserId?: string }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [droits, setDroits] = useState<UserRow | null>(null);
 
   async function load() {
     setLoading(true);
@@ -72,6 +91,18 @@ export function UsersScreen({ currentUserId }: { currentUserId?: string }) {
               },
               { key: 'role', header: 'Rôle', render: (u) => ROLE_LABELS[u.role] },
               {
+                key: 'acces',
+                header: 'Accès',
+                render: (u) =>
+                  u.accesPersonnalise ? (
+                    <span className="text-[11px]">
+                      <span className="font-bold text-[#0F5B38]">{u.screenAccess.length}</span> écran(s) autorisé(s)
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">Selon le rôle</span>
+                  )
+              },
+              {
                 key: 'active',
                 header: 'État',
                 align: 'center',
@@ -83,9 +114,14 @@ export function UsersScreen({ currentUserId }: { currentUserId?: string }) {
                 header: '',
                 align: 'right',
                 render: (u) => (
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(u)}>
-                    Modifier
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => setDroits(u)}>
+                      Droits d&apos;accès
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(u)}>
+                      Modifier
+                    </Button>
+                  </div>
                 )
               }
             ]}
@@ -112,8 +148,175 @@ export function UsersScreen({ currentUserId }: { currentUserId?: string }) {
           onError={(m) => toasts.error(m)}
         />
       )}
+      {droits && (
+        <DroitsAccesModal
+          user={droits}
+          onClose={() => setDroits(null)}
+          onSaved={async (message) => {
+            setDroits(null);
+            await load();
+            toasts.success(message);
+          }}
+          onError={(m) => toasts.error(m)}
+        />
+      )}
+
       <ToastHost toasts={toasts.toasts} onDismiss={toasts.dismiss} />
     </Screen>
+  );
+}
+
+/**
+ * Droits d'accès: la liste de TOUS les écrans, à cocher un par un.
+ *
+ * Demande directe du propriétaire — créer une session puis parcourir les écrans
+ * en décidant pour chacun. Les écrans sont groupés par menu parce que c'est
+ * ainsi que l'utilisateur les connaît, et chaque groupe se coche d'un bloc: sur
+ * une soixantaine d'écrans, cocher un à un serait décourageant.
+ *
+ * Ce que ce réglage fait, et ce qu'il ne fait pas: il décide de ce que la
+ * personne peut OUVRIR. Ce que le serveur l'autorise à FAIRE reste décidé par
+ * son rôle, et cette distinction est rappelée à l'écran — masquer un menu n'a
+ * jamais protégé une API.
+ */
+function DroitsAccesModal({
+  user,
+  onClose,
+  onSaved,
+  onError
+}: {
+  user: UserRow;
+  onClose: () => void;
+  onSaved: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [personnalise, setPersonnalise] = useState(user.accesPersonnalise);
+  const [coches, setCoches] = useState<string[]>(user.screenAccess);
+  // `screenAccess` est une liste de chaines cote serveur; la comparaison avec les
+  // identifiants du registre se fait donc sur des chaines, sans conversion.
+  const [saving, setSaving] = useState(false);
+
+  // Ce que le rôle laisse voir: cocher au-delà n'aurait aucun effet.
+  const parGroupe = useMemo(() => {
+    const ecrans = visibleScreens({ role: user.role });
+    const groupes = new Map<string, ScreenDef[]>();
+    for (const e of ecrans) {
+      if (e.group === 'Accueil') continue;
+      if (!groupes.has(e.group)) groupes.set(e.group, []);
+      groupes.get(e.group)!.push(e);
+    }
+    return [...groupes.entries()];
+  }, [user.role]);
+
+  const total = parGroupe.reduce((n, [, e]) => n + e.length, 0);
+
+  function basculer(id: string) {
+    setCoches((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  }
+
+  function basculerGroupe(ecrans: ScreenDef[]) {
+    const ids: string[] = ecrans.map((e) => e.id);
+    const tousCoches = ids.every((id) => coches.includes(id));
+    setCoches((c) => (tousCoches ? c.filter((x) => !ids.includes(x)) : [...new Set([...c, ...ids])]));
+  }
+
+  async function enregistrer() {
+    setSaving(true);
+    try {
+      await apiRequest(`/users/${user.id}/access`, {
+        method: 'PUT',
+        body: { accesPersonnalise: personnalise, screenAccess: personnalise ? coches : [] }
+      });
+      await onSaved(
+        personnalise
+          ? `${user.username}: ${coches.length} écran(s) autorisé(s).`
+          : `${user.username} suit de nouveau les droits de son rôle.`
+      );
+    } catch (err) {
+      onError(describeError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Droits d'accès — ${user.username}`}
+      onClose={onClose}
+      width="max-w-3xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button variant="primary" onClick={enregistrer} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 min-h-0">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+          <Checkbox
+            label="Limiter cet utilisateur à une liste d'écrans"
+            checked={personnalise}
+            onChange={(e) => setPersonnalise(e.target.checked)}
+          />
+          <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+            Décoché, le compte voit tous les écrans permis par son rôle ({ROLE_LABELS[user.role]}). Ce réglage décide de ce
+            que la personne peut <b>ouvrir</b>; ce qu&apos;elle a le droit de <b>faire</b> reste fixé par son rôle et
+            contrôlé par le serveur.
+          </p>
+        </div>
+
+        {personnalise && (
+          <>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">
+                <b className="text-[#0F5B38]">{coches.length}</b> / {total} écran(s)
+              </span>
+              <div className="flex gap-1">
+                <Button size="sm" variant="secondary" onClick={() => setCoches(parGroupe.flatMap(([, e]) => e.map((x) => x.id as string)))}>
+                  Tout cocher
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setCoches([])}>
+                  Tout décocher
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-auto max-h-[52vh] flex flex-col gap-2 pr-1">
+              {parGroupe.map(([groupe, ecrans]) => {
+                const nbCoches = ecrans.filter((e) => coches.includes(e.id)).length;
+                return (
+                  <div key={groupe} className="border border-slate-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => basculerGroupe(ecrans)}
+                      className="w-full px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition"
+                    >
+                      <span>{groupe}</span>
+                      <span className="text-slate-400 font-medium">
+                        {nbCoches}/{ecrans.length} — tout {nbCoches === ecrans.length ? 'décocher' : 'cocher'}
+                      </span>
+                    </button>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-0.5 p-2">
+                      {ecrans.map((e) => (
+                        <Checkbox
+                          key={e.id}
+                          label={e.label}
+                          checked={coches.includes(e.id)}
+                          onChange={() => basculer(e.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 

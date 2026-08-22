@@ -45,6 +45,7 @@ import {
   loginSchema,
   updateChequeEtatSchema,
   updateSettingsSchema,
+  updateUserAccessSchema,
   updateUserSchema,
   paymentModes,
   updateArticleSchema,
@@ -108,13 +109,32 @@ api.post('/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'INVALID_CREDENTIALS' });
     }
     const authUser = { id: user.id, username: user.username, role: user.role };
-    res.json({ token: signToken(authUser), user: authUser, mustChangePassword: user.mustChangePassword });
+    /*
+     * Les droits d'ecran accompagnent la session mais ne sont PAS dans le jeton:
+     * un jeton est valable douze heures, et un droit retire doit prendre effet
+     * a la connexion suivante, pas a l'expiration du jeton. Ils sont donc relus
+     * a chaque `/auth/me`.
+     */
+    res.json({
+      token: signToken(authUser),
+      user: { ...authUser, accesPersonnalise: user.accesPersonnalise, screenAccess: user.screenAccess },
+      mustChangePassword: user.mustChangePassword
+    });
   } catch (error) {
     handleError(res, error);
   }
 });
 
-api.get('/auth/me', requireAuth, (req, res) => res.json(req.user));
+api.get('/auth/me', requireAuth, async (req, res) => {
+  // Relecture en base: un droit retire pendant la session doit s'appliquer au
+  // prochain rafraichissement, sans attendre l'expiration du jeton.
+  const frais = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, username: true, role: true, active: true, accesPersonnalise: true, screenAccess: true }
+  });
+  if (!frais || !frais.active) return res.status(401).json({ message: 'SESSION_EXPIRED' });
+  res.json(frais);
+});
 
 // Every route below requires a valid session.
 api.use(requireAuth);
@@ -760,7 +780,16 @@ api.post('/documents/:id/facturer', requireRole('ADMINISTRATEUR', 'CAISSIER'), a
 api.get('/users', requireRole('ADMINISTRATEUR'), async (_req, res) => {
   res.json(
     await prisma.user.findMany({
-      select: { id: true, username: true, role: true, active: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        active: true,
+        accesPersonnalise: true,
+        screenAccess: true,
+        createdAt: true,
+        updatedAt: true
+      },
       orderBy: { username: 'asc' }
     })
   );
@@ -779,6 +808,31 @@ api.post('/users', requireRole('ADMINISTRATEUR'), async (req, res) => {
       select: { id: true, username: true, role: true, active: true, createdAt: true }
     });
     res.status(201).json(user);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+/**
+ * Droits d'ecran d'un compte.
+ *
+ * Rappel volontaire: cocher un ecran decide de ce que la personne peut OUVRIR,
+ * pas de ce que le serveur l'autorise a faire. Les routes sensibles restent
+ * gardees par `requireRole` — masquer un menu n'a jamais protege une API.
+ */
+api.put('/users/:id/access', requireRole('ADMINISTRATEUR'), async (req, res) => {
+  try {
+    const input = updateUserAccessSchema.parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        accesPersonnalise: input.accesPersonnalise,
+        // Les doublons ne servent a rien et rendraient la comparaison bruyante.
+        screenAccess: [...new Set(input.screenAccess)]
+      },
+      select: { id: true, username: true, role: true, active: true, accesPersonnalise: true, screenAccess: true }
+    });
+    res.json(user);
   } catch (error) {
     handleError(res, error);
   }

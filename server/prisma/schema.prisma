@@ -102,6 +102,16 @@ model User {
   /// Forces a password change at next login. Set on seeded/default accounts and
   /// whenever an admin resets someone's password.
   mustChangePassword Boolean @default(false)
+  /// Droits d'acces ecran par ecran.
+  ///
+  /// `accesPersonnalise` distingue deux situations que la seule liste ne
+  /// permettrait pas de separer: un compte qui suit les droits de son role
+  /// (liste vide, comportement historique) et un compte a qui l'on a
+  /// explicitement tout retire (liste vide aussi). Sans ce drapeau, retirer le
+  /// dernier ecran rendrait par erreur tous les droits du role.
+  accesPersonnalise Boolean @default(false)
+  /// Identifiants d'ecrans autorises quand `accesPersonnalise` est actif.
+  screenAccess      String[] @default([])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

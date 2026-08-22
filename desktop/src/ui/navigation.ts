@@ -1,4 +1,4 @@
-import type { UserRole } from '@anagnorisis/shared';
+import { peutOuvrirEcran, type UserRole } from '@anagnorisis/shared';
 import { FolderOpen, HelpCircle, LayoutDashboard, ScanBarcode, Search, Settings, Wrench, type LucideIcon } from 'lucide-react';
 
 /**
@@ -206,13 +206,28 @@ export function getScreen(id: ScreenId): ScreenDef | undefined {
   return BY_ID.get(id);
 }
 
-export function visibleScreens(role: UserRole | undefined): ScreenDef[] {
-  return SCREENS.filter((s) => !s.roles || (role && s.roles.includes(role)));
+/**
+ * Écrans qu'un utilisateur peut ouvrir.
+ *
+ * Prend l'utilisateur entier et non plus son seul rôle: depuis que les droits
+ * se règlent écran par écran, le rôle ne suffit plus à décider. La règle
+ * elle-même vit dans la couche partagée, pour que le serveur et le client ne
+ * puissent pas en avoir deux versions.
+ */
+export function visibleScreens(user: UtilisateurAcces | undefined): ScreenDef[] {
+  return SCREENS.filter((s) => peutOuvrirEcran(user ?? null, s));
+}
+
+/** Ce dont la navigation a besoin pour décider: le rôle et les droits d'écran. */
+export interface UtilisateurAcces {
+  role: UserRole;
+  accesPersonnalise?: boolean;
+  screenAccess?: string[];
 }
 
 /** Recherche insensible aux accents; les écrans construits passent devant. */
-export function searchScreens(query: string, role: UserRole | undefined): ScreenDef[] {
-  const pool = visibleScreens(role);
+export function searchScreens(query: string, user: UtilisateurAcces | undefined): ScreenDef[] {
+  const pool = visibleScreens(user);
   const q = normalize(query.trim());
   if (!q) return pool;
 

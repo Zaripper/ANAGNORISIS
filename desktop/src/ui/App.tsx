@@ -2980,7 +2980,22 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
   // Identifies the signed-in user for the shell (name, role) and for role-gated
   // navigation entries. Read from the session the login screen persisted.
-  const currentUser = useMemo(() => getStoredUser<{ id: string; username: string; role: UserRole }>(), []);
+  /**
+   * L'utilisateur en session, droits d'ecran compris. Ils sont stockes avec la
+   * session plutot que lus dans le jeton: un droit retire doit s'appliquer a la
+   * reconnexion suivante, pas a l'expiration du jeton (douze heures).
+   */
+  const currentUser = useMemo(
+    () =>
+      getStoredUser<{
+        id: string;
+        username: string;
+        role: UserRole;
+        accesPersonnalise?: boolean;
+        screenAccess?: string[];
+      }>(),
+    []
+  );
 
   /**
    * Régules and chèques used to share one view with a hidden mode toggle, so the
@@ -3699,7 +3714,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {currentView === 'PRIX_ARTICLES' && <PrixArticlesView articles={articles} categories={categories} depots={depots} />}
 
-        {currentView === 'ACCUEIL' && <AccueilScreen username={currentUser?.username} role={currentUser?.role} onNavigate={setCurrentView} />}
+        {currentView === 'ACCUEIL' && <AccueilScreen username={currentUser?.username} user={currentUser ?? undefined} onNavigate={setCurrentView} />}
 
 
         {/* ---------- POS / RETAIL ---------- */}

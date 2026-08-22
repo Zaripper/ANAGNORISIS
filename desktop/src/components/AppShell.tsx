@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { UserRole } from '@anagnorisis/shared';
+import { peutOuvrirEcran, type UserRole } from '@anagnorisis/shared';
 import { LogOut, Search } from 'lucide-react';
 import {
   HOME_ICON,
   HOME_SCREEN,
   MODULE_META,
   SCREEN_GROUPS,
+  type UtilisateurAcces,
   ScreenDef,
   ScreenGroup,
   ScreenId,
@@ -54,11 +55,11 @@ export function DjemroudLogo({ className = 'w-8 h-8' }: { className?: string }) 
 // Command palette (Ctrl+K)
 // ---------------------------------------------------------------------------
 function CommandPalette({
-  role,
+  user,
   onSelect,
   onClose
 }: {
-  role: UserRole | undefined;
+  user: UtilisateurAcces | undefined;
   onSelect: (id: ScreenId) => void;
   onClose: () => void;
 }) {
@@ -66,7 +67,7 @@ function CommandPalette({
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(() => searchScreens(query, role).slice(0, 40), [query, role]);
+  const results = useMemo(() => searchScreens(query, user).slice(0, 40), [query, user]);
 
   useEffect(() => setActive(0), [query]);
 
@@ -171,22 +172,22 @@ function MenuBar({
   isHome,
   onSelect,
   onHome,
-  role
+  user
 }: {
   activeModule: ScreenGroup | null;
   current: ScreenId | null;
   isHome: boolean;
   onSelect: (id: ScreenId) => void;
   onHome: () => void;
-  role: UserRole | undefined;
+  user: UtilisateurAcces | undefined;
 }) {
   const [ouvert, setOuvert] = useState<ScreenGroup | null>(null);
   const barre = useRef<HTMLDivElement>(null);
 
   const modules = useMemo(() => {
-    const avecEcrans = new Set(visibleScreens(role).map((s) => s.group));
+    const avecEcrans = new Set(visibleScreens(user).map((s) => s.group));
     return SCREEN_GROUPS.filter((g) => avecEcrans.has(g));
-  }, [role]);
+  }, [user]);
 
   // Un clic hors de la barre referme le menu, comme partout ailleurs.
   useEffect(() => {
@@ -219,7 +220,7 @@ function MenuBar({
       </button>
 
       {modules.map((g) => {
-        const items = visibleScreens(role).filter((s) => s.group === g);
+        const items = visibleScreens(user).filter((s) => s.group === g);
         const estActif = activeModule === g && !isHome;
         return (
           <div key={g} className="relative">
@@ -276,7 +277,7 @@ export function AppShell({
 }: {
   current: ScreenId | null;
   onNavigate: (id: ScreenId) => void;
-  user: { username: string; role: UserRole } | null;
+  user: ({ username: string } & UtilisateurAcces) | null;
   onLogout: () => void;
   children: React.ReactNode;
 }) {
@@ -317,7 +318,7 @@ export function AppShell({
         isHome={isHome}
         onSelect={onNavigate}
         onHome={() => onNavigate(HOME_SCREEN)}
-        role={user?.role}
+        user={user ?? undefined}
       />
 
       <header className="h-9 shrink-0 bg-white border-b border-slate-200 px-3 flex items-center gap-3">
@@ -353,11 +354,40 @@ export function AppShell({
       <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Keyed on the screen id so every navigation re-runs the entrance animation. */}
         <div key={current ?? 'home'} className="flex-1 min-h-0 flex flex-col p-3 anim-view">
-          {screen && !screen.implemented ? <NotBuiltYet screen={screen} /> : children}
+          {screen && !peutOuvrirEcran(user ?? null, screen) ? (
+            <AccesRefuse screen={screen} />
+          ) : screen && !screen.implemented ? (
+            <NotBuiltYet screen={screen} />
+          ) : (
+            children
+          )}
         </div>
       </main>
 
-      {paletteOpen && <CommandPalette role={user?.role} onSelect={onNavigate} onClose={() => setPaletteOpen(false)} />}
+      {paletteOpen && <CommandPalette user={user ?? undefined} onSelect={onNavigate} onClose={() => setPaletteOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Ecran auquel l'utilisateur n'a pas droit.
+ *
+ * Le menu ne le propose pas, mais il reste atteignable autrement: un raccourci
+ * d'accueil enregistre avant le retrait du droit, ou un ecran deja ouvert au
+ * moment ou l'administrateur modifie les droits. Mieux vaut le dire clairement
+ * que d'afficher une page vide qui ressemble a une panne.
+ */
+function AccesRefuse({ screen }: { screen: ScreenDef }) {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="bg-white border border-slate-200 rounded-2xl px-10 py-8 shadow-xs text-center max-w-md">
+        <div className="font-extrabold text-slate-900 text-sm mb-1">{screen.label}</div>
+        <div className="text-slate-400 text-xs mb-3">{screen.group}</div>
+        <p className="text-slate-500 text-xs leading-relaxed">
+          Votre compte n&apos;a pas acces a cet ecran. Demandez a un administrateur de vous l&apos;ouvrir depuis
+          <b> Outils &gt; Gestion des utilisateurs</b>.
+        </p>
+      </div>
     </div>
   );
 }

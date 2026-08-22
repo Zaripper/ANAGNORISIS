@@ -176,6 +176,61 @@ export function lineStockQuantity(line: Pick<TotalsLine, 'quantity' | 'quantiteB
   return line.quantity + (line.quantiteBonus ?? 0);
 }
 
+// ---------- Droits d'accès aux écrans ----------
+/** Identifiant de la page d'accueil, toujours accessible. */
+export const ECRAN_ACCUEIL = 'ACCUEIL';
+/**
+ * Un utilisateur peut-il ouvrir cet écran ?
+ *
+ * Deux niveaux se superposent, et ils ne disent pas la même chose:
+ *
+ *  - le RÔLE dit ce que le serveur autorise à faire (créer un article,
+ *    annuler un document). C'est la vraie frontière de sécurité, appliquée
+ *    côté serveur sur chaque route sensible.
+ *  - les DROITS ÉCRAN disent ce que la personne peut ouvrir. C'est une
+ *    question d'organisation du travail: un caissier n'a rien à faire dans les
+ *    états fiscaux, même s'il ne pourrait rien y casser.
+ *
+ * Masquer un écran n'est donc pas une protection: c'est le rôle qui protège.
+ * Les deux se cumulent — un écran coché reste inaccessible si le rôle ne le
+ * permet pas.
+ */
+export function peutOuvrirEcran(
+  utilisateur: { role: UserRole; accesPersonnalise?: boolean; screenAccess?: string[] } | null | undefined,
+  ecran: { id: string; roles?: UserRole[] }
+): boolean {
+  if (!utilisateur) return false;
+
+  /**
+   * L'accueil n'est jamais refusé.
+   *
+   * C'est la page d'atterrissage: la refuser enferme la personne devant un
+   * message de refus sans aucun moyen d'aller ailleurs. Elle ne donne accès à
+   * rien par elle-même — ses raccourcis sont filtrés comme le reste.
+   */
+  if (ecran.id === ECRAN_ACCUEIL) return true;
+
+  // Le rôle reste la condition la plus forte: il prime sur toute case cochée.
+  if (ecran.roles && !ecran.roles.includes(utilisateur.role)) return false;
+
+  // Sans droits personnalisés, le compte suit simplement son rôle.
+  if (!utilisateur.accesPersonnalise) return true;
+
+  return (utilisateur.screenAccess ?? []).includes(ecran.id);
+}
+
+export const updateUserAccessSchema = z.object({
+  accesPersonnalise: z.boolean(),
+  /**
+   * Les identifiants ne sont pas validés contre une liste: le registre des
+   * écrans vit côté client (il porte des icônes), et le dupliquer ici créerait
+   * deux sources de vérité qui divergeraient. Un identifiant inconnu
+   * n'autorise simplement aucun écran.
+   */
+  screenAccess: z.array(z.string().min(1).max(64)).max(200)
+});
+export type UpdateUserAccessInput = z.infer<typeof updateUserAccessSchema>;
+
 // ---------- Filtrage par période ----------
 /**
  * Une valeur tombe-t-elle dans l'intervalle [du, au] ?
