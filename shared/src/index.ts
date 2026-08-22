@@ -613,6 +613,10 @@ export const createArticleSchema = z.object({
   preferred: z.boolean().optional(),
   /** Active le suivi par lot et date de péremption pour cet article. */
   suiviLot: z.boolean().optional(),
+  /** Prix public de reference. */
+  ppa: z.number().nonnegative().optional(),
+  /** Taux maximal d'UG accorde, en pourcentage de la quantite facturee. */
+  tauxUGAutorise: z.number().min(0).max(100).optional(),
   // Contingentement des produits rares: max par client et par document.
   maxQtyPerClient: z.number().int().positive().optional().nullable(),
   prices: z

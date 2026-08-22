@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { UserRole } from '@anagnorisis/shared';
-import { ChevronsLeft, ChevronsRight, LogOut, Search } from 'lucide-react';
+import { LogOut, Search } from 'lucide-react';
 import {
   HOME_ICON,
   HOME_SCREEN,
@@ -151,134 +151,116 @@ function CommandPalette({
 }
 
 // ---------------------------------------------------------------------------
-// Icon rail (modules)
+// Barre de menus (en haut)
 // ---------------------------------------------------------------------------
-function Rail({
+
+/**
+ * Navigation en barre supérieure, avec un menu déroulant par module.
+ *
+ * Elle remplace le rail d'icônes et le panneau latéral, qui mangeaient à eux
+ * deux près de 300 px sur la gauche — la largeur d'une colonne de tableau. Sur
+ * un écran de poste de saisie, c'était autant de place en moins pour les lignes
+ * d'un bon, et c'est le premier reproche fait au logiciel.
+ *
+ * La forme reprend celle des logiciels de gestion que l'utilisateur connaît:
+ * une barre de menus qu'on ouvre, où l'on choisit, et qui se referme.
+ */
+function MenuBar({
   activeModule,
+  current,
   isHome,
-  onModule,
+  onSelect,
   onHome,
   role
 }: {
   activeModule: ScreenGroup | null;
+  current: ScreenId | null;
   isHome: boolean;
-  onModule: (g: ScreenGroup) => void;
+  onSelect: (id: ScreenId) => void;
   onHome: () => void;
   role: UserRole | undefined;
 }) {
+  const [ouvert, setOuvert] = useState<ScreenGroup | null>(null);
+  const barre = useRef<HTMLDivElement>(null);
+
   const modules = useMemo(() => {
-    const withScreens = new Set(visibleScreens(role).map((s) => s.group));
-    return SCREEN_GROUPS.filter((g) => withScreens.has(g));
+    const avecEcrans = new Set(visibleScreens(role).map((s) => s.group));
+    return SCREEN_GROUPS.filter((g) => avecEcrans.has(g));
   }, [role]);
+
+  // Un clic hors de la barre referme le menu, comme partout ailleurs.
+  useEffect(() => {
+    if (!ouvert) return;
+    function surClic(e: MouseEvent) {
+      if (barre.current && !barre.current.contains(e.target as Node)) setOuvert(null);
+    }
+    function surTouche(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOuvert(null);
+    }
+    document.addEventListener('mousedown', surClic);
+    document.addEventListener('keydown', surTouche);
+    return () => {
+      document.removeEventListener('mousedown', surClic);
+      document.removeEventListener('keydown', surTouche);
+    };
+  }, [ouvert]);
 
   const Home = HOME_ICON;
 
   return (
-    <div className="w-[68px] shrink-0 bg-[#0B3D26] flex flex-col items-center py-3 gap-1 text-white">
-      <div className="mb-2 text-[#7BC9A3]">
-        <DjemroudLogo className="w-9 h-9" />
-      </div>
-
-      <RailButton label="Accueil" active={isHome} onClick={onHome}>
-        <Home className="w-[18px] h-[18px]" />
-      </RailButton>
-
-      <div className="w-8 border-t border-white/10 my-1.5" />
+    <div ref={barre} className="shrink-0 bg-[#0B3D26] text-white flex items-stretch h-10 relative z-40">
+      <button
+        onClick={onHome}
+        title="Accueil"
+        className={`px-3 flex items-center gap-2 transition ${isHome ? 'bg-white/15' : 'hover:bg-white/10'}`}
+      >
+        <DjemroudLogo className="w-6 h-6 text-[#7BC9A3]" />
+        <Home className="w-4 h-4" />
+      </button>
 
       {modules.map((g) => {
-        const Icon = MODULE_META[g].icon;
+        const items = visibleScreens(role).filter((s) => s.group === g);
+        const estActif = activeModule === g && !isHome;
         return (
-          <RailButton
-            key={g}
-            label={MODULE_META[g].label ?? g}
-            title={MODULE_META[g].hint}
-            active={activeModule === g && !isHome}
-            onClick={() => onModule(g)}
-          >
-            <Icon className="w-[18px] h-[18px]" />
-          </RailButton>
+          <div key={g} className="relative">
+            <button
+              onClick={() => setOuvert((o) => (o === g ? null : g))}
+              onMouseEnter={() => setOuvert((o) => (o ? g : o))}
+              className={`h-full px-4 text-[12px] font-semibold transition ${
+                ouvert === g ? 'bg-white/20' : estActif ? 'bg-white/10' : 'hover:bg-white/10'
+              }`}
+            >
+              {MODULE_META[g].label ?? g}
+            </button>
+
+            {ouvert === g && (
+              <div className="absolute left-0 top-full min-w-[268px] bg-white text-slate-700 rounded-b-xl shadow-2xl border border-slate-200 border-t-0 py-1.5 anim-panel">
+                {items.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setOuvert(null);
+                      onSelect(s.id);
+                    }}
+                    title={s.implemented ? s.label : `${s.label} — pas encore disponible`}
+                    className={`w-full text-left px-4 py-1.5 text-[12px] flex items-center justify-between gap-3 transition ${
+                      current === s.id
+                        ? 'bg-[#0F5B38] text-white font-semibold'
+                        : s.implemented
+                          ? 'hover:bg-slate-100'
+                          : 'text-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="truncate">{s.label}</span>
+                    {!s.implemented && <span className="text-[9px] shrink-0">•</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         );
       })}
     </div>
-  );
-}
-
-function RailButton({
-  label,
-  title,
-  active,
-  onClick,
-  children
-}: {
-  label: string;
-  title?: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title ?? label}
-      className={`w-14 rounded-xl flex flex-col items-center gap-0.5 py-1.5 transition-all duration-150 ${
-        active ? 'bg-white/15 text-white shadow-inner' : 'text-white/55 hover:text-white hover:bg-white/8'
-      }`}
-    >
-      {children}
-      <span className="text-[8.5px] font-semibold leading-none tracking-tight">{label}</span>
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Contextual module panel
-// ---------------------------------------------------------------------------
-function ModulePanel({
-  module,
-  current,
-  onSelect,
-  role,
-  collapsed
-}: {
-  module: ScreenGroup;
-  current: ScreenId | null;
-  onSelect: (id: ScreenId) => void;
-  role: UserRole | undefined;
-  collapsed: boolean;
-}) {
-  const items = useMemo(() => visibleScreens(role).filter((s) => s.group === module), [role, module]);
-
-  if (collapsed) return null;
-
-  return (
-    <aside className="w-56 shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-y-auto anim-panel" key={module}>
-      <div className="px-4 pt-4 pb-2">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{module}</div>
-        <div className="text-[10px] text-slate-300 mt-0.5 leading-snug">{MODULE_META[module].hint}</div>
-      </div>
-      <nav className="px-2 pb-4 flex flex-col gap-0.5">
-        {items.map((s) => {
-          const isActive = current === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => onSelect(s.id)}
-              title={s.implemented ? s.label : `${s.label} — pas encore disponible`}
-              className={`text-left px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-2 ${
-                isActive
-                  ? 'bg-[#0F5B38] text-white shadow-sm'
-                  : s.implemented
-                    ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    : 'text-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <span className="truncate">{s.label}</span>
-              {!s.implemented && <span className={`text-[9px] shrink-0 ${isActive ? 'text-white/70' : 'text-slate-300'}`}>•</span>}
-            </button>
-          );
-        })}
-      </nav>
-    </aside>
   );
 }
 
@@ -299,7 +281,6 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
   // The module whose panel is shown. Follows the current screen but can be
   // switched independently (browsing another module before picking a screen).
   const [activeModule, setActiveModule] = useState<ScreenGroup>('Fichier');
@@ -323,69 +304,58 @@ export function AppShell({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  function openModule(g: ScreenGroup) {
-    setActiveModule(g);
-    setPanelCollapsed(false);
-    // Land on the module's first screen immediately — one click, not two.
-    const first = visibleScreens(user?.role ?? undefined).find((s) => s.group === g);
-    if (first) onNavigate(first.id);
-  }
-
   return (
-    <div className="flex h-screen w-screen bg-[#F6F5F1] text-slate-800 font-sans text-xs overflow-hidden">
-      <Rail activeModule={activeModule} isHome={isHome} onModule={openModule} onHome={() => onNavigate(HOME_SCREEN)} role={user?.role} />
+    /*
+     * Empilement vertical: menus en haut, puis le contenu sur TOUTE la largeur.
+     * L'ancienne disposition (rail + panneau à gauche) consommait près de 300 px
+     * en permanence, ce qui écrasait les tableaux de saisie.
+     */
+    <div className="flex flex-col h-screen w-screen bg-[#F6F5F1] text-slate-800 font-sans text-xs overflow-hidden">
+      <MenuBar
+        activeModule={activeModule}
+        current={current}
+        isHome={isHome}
+        onSelect={onNavigate}
+        onHome={() => onNavigate(HOME_SCREEN)}
+        role={user?.role}
+      />
 
-      {!isHome && <ModulePanel module={activeModule} current={current} onSelect={onNavigate} role={user?.role} collapsed={panelCollapsed} />}
+      <header className="h-9 shrink-0 bg-white border-b border-slate-200 px-3 flex items-center gap-3">
+        <div className="flex items-center gap-1.5 min-w-0 text-[12px]">
+          {screen && !isHome && <span className="text-slate-400">{screen.group}</span>}
+          {screen && !isHome && <span className="text-slate-300">/</span>}
+          <span className="font-bold text-slate-900 truncate">{isHome ? 'Accueil' : screen?.label ?? ''}</span>
+        </div>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="h-12 shrink-0 bg-white border-b border-slate-200 px-4 flex items-center gap-3">
-          {!isHome && (
-            <button
-              onClick={() => setPanelCollapsed((c) => !c)}
-              className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-              aria-label={panelCollapsed ? 'Afficher le panneau' : 'Masquer le panneau'}
-            >
-              {panelCollapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
-            </button>
-          )}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="ml-auto flex items-center gap-2 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-400 hover:bg-white hover:border-slate-300 hover:text-slate-600 transition w-56"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span className="text-[11px]">Rechercher…</span>
+          <kbd className="ml-auto text-[9px] font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5">Ctrl K</kbd>
+        </button>
 
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 min-w-0 text-[13px]">
-            {screen && !isHome && <span className="text-slate-400">{screen.group}</span>}
-            {screen && !isHome && <span className="text-slate-300">/</span>}
-            <span className="font-bold text-slate-900 truncate">{isHome ? 'Tableau de bord' : screen?.label ?? ''}</span>
+        <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-slate-100">
+          <div className="w-6 h-6 rounded-full bg-[#0F5B38] text-white flex items-center justify-center text-[9px] font-bold uppercase">
+            {user?.username?.slice(0, 2) ?? '??'}
           </div>
-
-          <button
-            onClick={() => setPaletteOpen(true)}
-            className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 hover:bg-white hover:border-slate-300 hover:text-slate-600 transition w-64"
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Rechercher…</span>
-            <kbd className="ml-auto text-[9px] font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5">Ctrl K</kbd>
+          <div className="leading-tight hidden md:block">
+            <div className="font-semibold text-slate-700 text-[11px]">{user?.username}</div>
+            <div className="text-[9px] text-slate-400">{user?.role}</div>
+          </div>
+          <button onClick={onLogout} title="Déconnexion" className="p-1 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
+            <LogOut className="w-4 h-4" />
           </button>
+        </div>
+      </header>
 
-          <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-slate-100">
-            <div className="w-7 h-7 rounded-full bg-[#0F5B38] text-white flex items-center justify-center text-[10px] font-bold uppercase">
-              {user?.username?.slice(0, 2) ?? '??'}
-            </div>
-            <div className="leading-tight hidden md:block">
-              <div className="font-semibold text-slate-700 text-[11px]">{user?.username}</div>
-              <div className="text-[9px] text-slate-400">{user?.role}</div>
-            </div>
-            <button onClick={onLogout} title="Déconnexion" className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
-
-        <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {/* Keyed on the screen id so every navigation re-runs the entrance animation. */}
-          <div key={current ?? 'home'} className="flex-1 min-h-0 flex flex-col p-5 anim-view">
-            {screen && !screen.implemented ? <NotBuiltYet screen={screen} /> : children}
-          </div>
-        </main>
-      </div>
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Keyed on the screen id so every navigation re-runs the entrance animation. */}
+        <div key={current ?? 'home'} className="flex-1 min-h-0 flex flex-col p-3 anim-view">
+          {screen && !screen.implemented ? <NotBuiltYet screen={screen} /> : children}
+        </div>
+      </main>
 
       {paletteOpen && <CommandPalette role={user?.role} onSelect={onNavigate} onClose={() => setPaletteOpen(false)} />}
     </div>

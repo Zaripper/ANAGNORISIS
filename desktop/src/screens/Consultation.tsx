@@ -40,16 +40,129 @@ function EcheanceBP({ dateValidite }: { dateValidite?: string | null }) {
   return <span className="text-slate-500 text-xs">{jours} j</span>;
 }
 
+/**
+ * Aperçu d'un document, ouvert en cliquant une ligne.
+ *
+ * Reproche du propriétaire: depuis une file de validation, impossible de voir
+ * ce qu'on validait. Valider un bon sans pouvoir en lire les lignes, c'est
+ * signer sans lire. La fenêtre est en lecture seule et se ferme à l'Échap.
+ */
+function ApercuDocument({ documentId, onClose }: { documentId: string; onClose: () => void }) {
+  const [doc, setDoc] = useState<DocumentRow | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiRequest<DocumentRow>(`/documents/${documentId}`)
+      .then(setDoc)
+      .catch((e) => setErreur(describeError(e)));
+  }, [documentId]);
+
+  useEffect(() => {
+    function surTouche(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', surTouche);
+    return () => window.removeEventListener('keydown', surTouche);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center gap-4">
+          <div className="min-w-0">
+            <div className="font-bold text-slate-900 text-sm">
+              {doc ? `${doc.type} ${doc.reference}` : 'Chargement…'}
+            </div>
+            {doc && (
+              <div className="text-[11px] text-slate-400">
+                {dateShort(doc.createdAt)} · {doc.partner?.raisonSociale ?? 'Sans partenaire'} · {statusLabel(doc.status)}
+              </div>
+            )}
+          </div>
+          <Button size="sm" variant="secondary" onClick={onClose}>
+            Fermer (Échap)
+          </Button>
+        </div>
+
+        <div className="p-4 flex-1 min-h-0 overflow-auto">
+          {erreur && <div className="text-xs text-rose-700">{erreur}</div>}
+          {doc && (
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th className="p-2">Code</th>
+                  <th className="p-2">Désignation</th>
+                  <th className="p-2 text-center">Qté</th>
+                  <th className="p-2 text-center">UG</th>
+                  <th className="p-2 text-right">P.U. HT</th>
+                  <th className="p-2 text-right">Remise</th>
+                  <th className="p-2 text-right">Montant HT</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(doc.lines ?? []).map((l) => (
+                  <tr key={l.id}>
+                    <td className="p-2 font-mono font-bold text-[#0F5B38]">{l.article?.code ?? '—'}</td>
+                    <td className="p-2">{l.article?.designation ?? '—'}</td>
+                    <td className="p-2 text-center font-mono font-bold">{l.quantity}</td>
+                    <td className="p-2 text-center font-mono text-[#0F5B38]">{l.quantiteBonus ? `+${l.quantiteBonus}` : '—'}</td>
+                    <td className="p-2 text-right font-mono">{money(num(l.unitPriceHT))}</td>
+                    <td className="p-2 text-right font-mono text-slate-500">{num(l.discountPercent)}%</td>
+                    <td className="p-2 text-right font-mono font-bold">{money(num(l.totalHT))}</td>
+                  </tr>
+                ))}
+                {(doc.lines ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-slate-400">
+                      Ce document ne contient aucune ligne.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {doc && (
+          <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-6 text-xs shrink-0">
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase tracking-wider block">Total HT</span>
+              <span className="font-mono font-bold">{money(num(doc.totalHT))}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase tracking-wider block">TVA</span>
+              <span className="font-mono font-bold">{money(num(doc.totalTVA))}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase tracking-wider block">Timbre</span>
+              <span className="font-mono font-bold text-amber-700">{money(num(doc.stampDuty))}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase tracking-wider block">Total TTC</span>
+              <span className="font-mono font-black text-[#0F5B38]">{money(num(doc.totalTTC))}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Shared read-only document table used by the consultation screens. */
 function DocumentsTable({
   rows,
   extraColumns,
   extraActions,
+  onRowClick,
   emptyMessage
 }: {
   rows: DocumentRow[];
   extraColumns?: Column<DocumentRow>[];
   extraActions?: (d: DocumentRow) => React.ReactNode;
+  onRowClick?: (d: DocumentRow) => void;
   emptyMessage: string;
 }) {
   return (
@@ -66,6 +179,7 @@ function DocumentsTable({
       ]}
       rows={rows}
       rowKey={(d) => d.id}
+      onRowClick={onRowClick}
       emptyMessage={emptyMessage}
     />
   );
@@ -98,6 +212,7 @@ export function ValidationQueueScreen({
 }) {
   const toasts = useToasts();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [apercu, setApercu] = useState<string | null>(null);
   const estBonPreparation = type === 'BON_PREPARATION';
   const queue = useMemo(() => documents.filter((d) => d.type === type && d.status === 'OUVERT'), [documents, type]);
 
@@ -158,6 +273,7 @@ export function ValidationQueueScreen({
         <div className="p-3 flex-1 min-h-0">
           <DocumentsTable
             rows={queue}
+            onRowClick={(d) => setApercu(d.id)}
             emptyMessage="Aucun document en attente de validation."
             extraColumns={
               estBonPreparation
@@ -187,6 +303,7 @@ export function ValidationQueueScreen({
           />
         </div>
       </Card>
+      {apercu && <ApercuDocument documentId={apercu} onClose={() => setApercu(null)} />}
       <ToastHost toasts={toasts.toasts} onDismiss={toasts.dismiss} />
     </Screen>
   );
@@ -209,6 +326,7 @@ export function DocumentListScreen({
   onPrint: (docId: string) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>('TOUS');
+  const [apercu, setApercu] = useState<string | null>(null);
 
   /**
    * Filtre par période sur la date du document. C'est la date de saisie qui
@@ -270,6 +388,7 @@ export function DocumentListScreen({
         <div className="p-3 flex-1 min-h-0">
           <DocumentsTable
             rows={rows}
+            onRowClick={(d) => setApercu(d.id)}
             emptyMessage="Aucun document ne correspond."
             extraActions={(d) => (
               <Button size="sm" variant="secondary" onClick={() => onPrint(d.id)}>
@@ -279,6 +398,7 @@ export function DocumentListScreen({
           />
         </div>
       </Card>
+      {apercu && <ApercuDocument documentId={apercu} onClose={() => setApercu(null)} />}
     </Screen>
   );
 }

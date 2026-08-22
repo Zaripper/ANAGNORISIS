@@ -274,6 +274,14 @@ model Article {
   /// catalogue existant n'a pas de lots, et l'imposer bloquerait chaque vente.
   /// Seuls les articles ainsi marques exigent une allocation de lot.
   suiviLot    Boolean        @default(false)
+  /// Prix public (PPA). Prix de reference affiche au client, distinct du prix de
+  /// vente negocie par categorie: le commercial doit voir les deux pour savoir
+  /// de combien il s'ecarte du tarif public.
+  ppa         Decimal        @default(0.0)
+  /// Taux maximal d'unites gratuites accorde sur cet article, en pourcentage de
+  /// la quantite facturee. Sert de garde-fou a la saisie: au-dela, le vendeur
+  /// donne plus que ce que la marge permet.
+  tauxUGAutorise Decimal     @default(0.0)
   /// Taux de refaction applicable a l'article, en pourcentage.
   tauxRefaction Decimal      @default(0.0)
   /// Stock de securite: quantite en dessous de laquelle il ne faut pas descendre.

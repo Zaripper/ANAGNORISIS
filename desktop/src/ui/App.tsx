@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest, ApiError, getStoredUser } from '../services/apiClient';
 import { AppShell, DjemroudLogo } from '../components/AppShell';
 import type { ScreenId } from './navigation';
@@ -31,6 +31,7 @@ import {
   Modal,
   Screen,
   SearchInput,
+  money,
   Select,
   ToastHost,
   statusChipClasses,
@@ -150,6 +151,12 @@ export interface Article {
   preferred?: boolean;
   /** Suivi par lot et date de péremption. */
   suiviLot?: boolean;
+  /** Prix public de référence. */
+  ppa?: number;
+  /** Taux maximal d'UG accordé, en % de la quantité facturée. */
+  tauxUGAutorise?: number;
+  /** Lot le plus proche de la péremption (FEFO): celui qui partira en premier. */
+  lots?: { numeroLot: string; datePeremption: string }[];
   /** Quantite maximale par client et par document (produits rares). */
   maxQtyPerClient?: number | null;
   stockGlobal: number; // summed available stock (in stock - reserved) across all depots
@@ -322,9 +329,11 @@ function PartnerSelectModal({
     (p) => p.code.toLowerCase().includes(searchTerm.toLowerCase()) || p.raisonSociale.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const { index, setIndex, refLigne } = useListeClavier(filteredPartners, onSelectPartner, onClose);
+
   return (
     <div className="fixed inset-0 bg-slate-900/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] text-xs">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] text-xs">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
           <div>
             <h3 className="font-bold text-slate-900 text-sm">Sélectionner un Client</h3>
@@ -346,27 +355,43 @@ function PartnerSelectModal({
           <div className="border border-slate-100 rounded-xl overflow-y-auto flex-1">
             <table className="w-full text-left">
               <thead className="bg-slate-50 sticky top-0 border-b border-slate-100 text-slate-500 font-medium text-[11px]">
+                {/* Le solde et le plafond décident si l'on peut vendre: ils se lisent ici,
+                    pas après avoir choisi le client. */}
                 <tr>
                   <th className="p-3">Code</th>
                   <th className="p-3">Raison Sociale</th>
                   <th className="p-3 text-right">Solde</th>
+                  <th className="p-3 text-right">Plafond</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredPartners.map((p) => (
-                  <tr
-                    key={p.id}
-                    onClick={() => {
-                      onSelectPartner(p);
-                      onClose();
-                    }}
-                    className="hover:bg-[#0F5B38]/5 cursor-pointer transition"
-                  >
-                    <td className="p-3 font-mono font-bold text-[#0F5B38]">{p.code}</td>
-                    <td className="p-3 font-medium text-slate-800">{p.raisonSociale}</td>
-                    <td className="p-3 text-right font-mono text-slate-600">{p.balance.toFixed(2)} DZD</td>
-                  </tr>
-                ))}
+                {filteredPartners.map((p, i) => {
+                  const depasse = p.seuilAutorise > 0 && p.balance > p.seuilAutorise;
+                  return (
+                    <tr
+                      key={p.id}
+                      ref={i === index ? refLigne : undefined}
+                      onMouseEnter={() => setIndex(i)}
+                      onClick={() => {
+                        onSelectPartner(p);
+                        onClose();
+                      }}
+                      className={`cursor-pointer transition ${i === index ? 'bg-[#0F5B38]/10' : 'hover:bg-[#0F5B38]/5'}`}
+                    >
+                      <td className="p-3 font-mono font-bold text-[#0F5B38]">{p.code}</td>
+                      <td className="p-3 font-medium text-slate-800">
+                        {p.raisonSociale}
+                        {depasse && <span className="ml-2 text-[10px] font-bold text-rose-600">plafond dépassé</span>}
+                      </td>
+                      <td className={`p-3 text-right font-mono ${depasse ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
+                        {money(p.balance)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-slate-400">
+                        {p.seuilAutorise > 0 ? money(p.seuilAutorise) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filteredPartners.length === 0 && (
                   <tr>
                     <td colSpan={3} className="p-6 text-center text-slate-400">
@@ -403,9 +428,12 @@ function ArticleSelectModal({
     (a) => a.code.toLowerCase().includes(searchTerm.toLowerCase()) || a.designation.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const { index, setIndex, refLigne } = useListeClavier(filteredArticles, onAddArticle, onClose);
+
   return (
     <div className="fixed inset-0 bg-slate-900/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh] text-xs">
+      {/* Plus large: huit colonnes d'information ne tiennent pas dans une boîte étroite. */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden flex flex-col max-h-[85vh] text-xs">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
           <div>
             <h3 className="font-bold text-slate-900 text-sm">Catalogue Parapharmaceutique</h3>
@@ -427,27 +455,51 @@ function ArticleSelectModal({
           <div className="border border-slate-100 rounded-xl overflow-y-auto flex-1">
             <table className="w-full text-left">
               <thead className="bg-slate-50 sticky top-0 border-b border-slate-100 text-slate-500 font-medium text-[11px]">
+                {/*
+                  Les six informations demandées par le propriétaire: sans elles il
+                  faut quitter le bon pour savoir si le produit peut être vendu, à
+                  quel prix public, et quelle marge d'UG on a.
+                */}
                 <tr>
                   <th className="p-3">Code</th>
                   <th className="p-3">Désignation</th>
-                  <th className="p-3 text-right">Prix HT</th>
                   <th className="p-3 text-center">Stock</th>
+                  <th className="p-3 text-center" title="Taux d'unités gratuites autorisé">UG max</th>
+                  <th className="p-3 text-center">Péremption</th>
+                  <th className="p-3 text-right">PPA</th>
+                  <th className="p-3 text-right">Coût d'achat</th>
+                  <th className="p-3 text-right">Prix HT</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredArticles.map((art) => (
+                {filteredArticles.map((art, i) => (
                   <tr
                     key={art.id}
+                    ref={i === index ? refLigne : undefined}
+                    onMouseEnter={() => setIndex(i)}
                     onClick={() => {
                       onAddArticle(art);
                       onClose();
                     }}
-                    className="hover:bg-[#0F5B38]/5 cursor-pointer transition"
+                    className={`cursor-pointer transition ${i === index ? 'bg-[#0F5B38]/10' : 'hover:bg-[#0F5B38]/5'}`}
                   >
                     <td className="p-3 font-mono font-bold text-slate-900">{art.code}</td>
                     <td className="p-3 font-medium text-slate-800">{art.designation}</td>
-                    <td className="p-3 text-right font-mono font-bold text-[#0F5B38]">{art.priceHT.toFixed(2)} DZD</td>
                     <td className="p-3 text-center">
+                      <span className={`font-mono font-bold ${art.stockGlobal > 0 ? 'text-slate-700' : 'text-rose-600'}`}>
+                        {art.stockGlobal}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center font-mono text-slate-500">
+                      {art.tauxUGAutorise ? `${art.tauxUGAutorise}%` : '—'}
+                    </td>
+                    <td className="p-3 text-center">
+                      <Peremption lots={art.lots} />
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-500">{art.ppa ? art.ppa.toFixed(2) : '—'}</td>
+                    <td className="p-3 text-right font-mono text-slate-500">{art.pump.toFixed(2)}</td>
+                    <td className="p-3 text-right font-mono font-bold text-[#0F5B38]">{art.priceHT.toFixed(2)}</td>
+                    <td className="p-3 text-center hidden">
                       <span
                         className={`px-2.5 py-1 rounded-full font-mono text-[10px] font-bold ${
                           art.stockGlobal > 0 ? 'bg-emerald-50 text-[#0F5B38]' : 'bg-rose-50 text-rose-600'
@@ -833,6 +885,180 @@ function PrixArticlesView({
       </div>
     </div>
   );
+}
+
+/**
+ * Bandeau d'identité du partenaire, affiché en permanence pendant la saisie.
+ *
+ * Le propriétaire a demandé ces six informations nommément: sans elles, le
+ * vendeur doit quitter le bon pour savoir à quel tarif vendre, ou si le client
+ * a déjà dépassé son plafond. Le dépassement est signalé en rouge parce que
+ * c'est une décision commerciale à prendre AVANT de saisir les lignes, pas en
+ * découvrant un refus à la validation.
+ */
+function PartenaireBandeau({
+  partner,
+  categories,
+  zones,
+  estAchat,
+  onChanger
+}: {
+  partner: Partner | null;
+  categories: PartnerCategoryOpt[];
+  zones: Zone[];
+  estAchat: boolean;
+  onChanger: () => void;
+}) {
+  const categorie = partner ? categories.find((c) => c.id === partner.categoryId) : undefined;
+  const secteur = partner?.zoneId ? zones.find((z) => z.id === partner.zoneId) : undefined;
+  const plafond = partner?.seuilAutorise ?? 0;
+  const solde = partner?.balance ?? 0;
+  const depasse = plafond > 0 && solde > plafond;
+
+  if (!partner) {
+    return (
+      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center justify-between">
+        <span className="text-slate-400 text-[11px] uppercase tracking-wider font-semibold">
+          {estAchat ? 'Fournisseur' : 'Client'} — aucun sélectionné
+        </span>
+        <Button size="sm" variant="secondary" onClick={onChanger}>
+          {estAchat ? 'Choisir un fournisseur' : 'Choisir un client'}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`border rounded-xl px-3 py-2 ${depasse ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200/80'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-1 flex-1 min-w-0">
+          <Info libelle={estAchat ? 'Fournisseur' : 'Nom client'} valeur={partner.raisonSociale} fort code={partner.code} />
+          <Info libelle="Catégorie" valeur={categorie?.label ?? '—'} />
+          <Info libelle="Secteur" valeur={secteur?.name ?? '—'} />
+          <Info libelle="Tarif" valeur={categorie?.label ? `Tarif ${categorie.label}` : '—'} />
+          <Info libelle="Solde" valeur={money(solde)} fort ton={solde > 0 ? 'rose' : 'vert'} />
+          <Info
+            libelle="Seuil / plafond"
+            valeur={plafond > 0 ? money(plafond) : 'Aucun'}
+            ton={depasse ? 'rose' : undefined}
+          />
+        </div>
+        <Button size="sm" variant="secondary" onClick={onChanger} className="shrink-0">
+          Changer
+        </Button>
+      </div>
+      {depasse && (
+        <div className="mt-1.5 text-[11px] font-semibold text-rose-700">
+          Plafond dépassé de {money(solde - plafond)} — à arbitrer avant de saisir les lignes.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Une paire libellé / valeur, format commun aux bandeaux. */
+function Info({
+  libelle,
+  valeur,
+  code,
+  fort,
+  ton
+}: {
+  libelle: string;
+  valeur: string;
+  code?: string;
+  fort?: boolean;
+  ton?: 'rose' | 'vert';
+}) {
+  const couleur = ton === 'rose' ? 'text-rose-700' : ton === 'vert' ? 'text-emerald-700' : 'text-slate-800';
+  return (
+    <div className="min-w-0">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-none">{libelle}</div>
+      <div className={`truncate ${fort ? 'font-bold' : 'font-medium'} ${couleur} text-[11px] mt-0.5`} title={valeur}>
+        {code && <span className="font-mono text-[#0F5B38] mr-1">{code}</span>}
+        {valeur}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Date de péremption la plus proche, avec son numéro de lot.
+ *
+ * C'est le lot qui partira en premier (FEFO), donc la seule échéance qui
+ * compte au moment de choisir l'article. Un article non suivi par lot n'en a
+ * pas: on l'affiche franchement plutôt que d'inventer une date.
+ */
+function Peremption({ lots }: { lots?: { numeroLot: string; datePeremption: string }[] }) {
+  const lot = lots?.[0];
+  if (!lot) return <span className="text-slate-300">—</span>;
+
+  const jours = Math.ceil((new Date(lot.datePeremption).getTime() - Date.now()) / 86400000);
+  const ton = jours < 0 ? 'text-rose-600 font-bold' : jours <= 90 ? 'text-amber-600 font-semibold' : 'text-slate-500';
+  return (
+    <span className={`font-mono text-[11px] ${ton}`} title={`Lot ${lot.numeroLot}`}>
+      {new Date(lot.datePeremption).toLocaleDateString('fr-FR')}
+    </span>
+  );
+}
+
+/**
+ * Navigation clavier dans une liste de sélection.
+ *
+ * Reproche direct du propriétaire: devoir lâcher le clavier pour attraper la
+ * souris. Sur un poste de saisie, chaque aller-retour coûte plus que la frappe
+ * elle-même. Flèches pour parcourir, Entrée pour choisir, Échap pour renoncer.
+ *
+ * L'index se remet à zéro quand la liste change (une frappe dans la recherche),
+ * sinon la sélection pointerait une ligne qui a disparu.
+ */
+function useListeClavier<T>(items: T[], onChoisir: (item: T) => void, onFermer: () => void) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [items.length]);
+
+  useEffect(() => {
+    function surTouche(e: KeyboardEvent) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIndex((i) => Math.min(i + 1, items.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setIndex(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setIndex(Math.max(0, items.length - 1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const choisi = items[index];
+        if (choisi) {
+          onChoisir(choisi);
+          // La fermeture appartient au hook: si elle dépendait de l'appelant,
+          // il suffirait qu'un seul oublie de la faire pour que le clavier
+          // sélectionne sans refermer — ce qui donne l'impression que la touche
+          // Entrée ne marche pas.
+          onFermer();
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onFermer();
+      }
+    }
+    window.addEventListener('keydown', surTouche);
+    return () => window.removeEventListener('keydown', surTouche);
+  }, [items, index, onChoisir, onFermer]);
+
+  // Garde la ligne surlignée dans le champ de vision quand on parcourt au clavier.
+  const refLigne = useCallback((n: HTMLElement | null) => {
+    n?.scrollIntoView({ block: 'nearest' });
+  }, []);
+
+  return { index, setIndex, refLigne };
 }
 
 interface SimpleMovementLine {
@@ -2744,36 +2970,6 @@ function NotImplementedScreen({ label }: { label: string }) {
   );
 }
 
-function AProposScreen() {
-  return (
-    <Screen title="À propos" description="Informations sur l'application" maxWidth="max-w-2xl">
-      <Card>
-        <div className="flex items-center gap-4 mb-4">
-          <DjemroudLogo className="w-14 h-14" />
-          <div>
-            <div className="font-extrabold text-slate-900 text-sm">Anagnorisis ERP</div>
-            <div className="text-slate-500 text-[11px]">Ets Djemroud — Parapharmacie Gros &amp; Détail</div>
-          </div>
-        </div>
-        <dl className="grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <dt className="text-slate-400 text-[10px] font-bold uppercase">Version</dt>
-            <dd className="font-mono text-slate-800">0.1.0</dd>
-          </div>
-          <div>
-            <dt className="text-slate-400 text-[10px] font-bold uppercase">Base de données</dt>
-            <dd className="text-slate-800">PostgreSQL</dd>
-          </div>
-        </dl>
-        <p className="text-slate-400 text-[11px] mt-4 leading-relaxed">
-          Raccourci : <kbd className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Ctrl</kbd> +{' '}
-          <kbd className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">K</kbd> ouvre la recherche d'écrans.
-        </p>
-      </Card>
-    </Screen>
-  );
-}
-
 // ==========================================
 // 4. MAIN APPLICATION COMPONENT
 // ==========================================
@@ -3028,6 +3224,10 @@ export default function App({ onLogout }: { onLogout: () => void }) {
         mainSupplierId: a.mainSupplierId ?? null,
         mainSupplierName: a.mainSupplier?.raisonSociale ?? null,
         preferred: Boolean(a.preferred),
+        suiviLot: Boolean(a.suiviLot),
+        ppa: num(a.ppa),
+        tauxUGAutorise: num(a.tauxUGAutorise),
+        lots: a.lots ?? [],
         maxQtyPerClient: a.maxQtyPerClient ?? null,
         priceHT: tierPrice ?? num(a.pump),
         stockGlobal: totalAvailable,
@@ -3499,9 +3699,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
 
         {currentView === 'PRIX_ARTICLES' && <PrixArticlesView articles={articles} categories={categories} depots={depots} />}
 
-        {currentView === 'ACCUEIL' && <AccueilScreen username={currentUser?.username} onNavigate={setCurrentView} />}
+        {currentView === 'ACCUEIL' && <AccueilScreen username={currentUser?.username} role={currentUser?.role} onNavigate={setCurrentView} />}
 
-        {currentView === 'A_PROPOS' && <AProposScreen />}
 
         {/* ---------- POS / RETAIL ---------- */}
         {currentView === 'CAISSE_POS' && (
@@ -3670,8 +3869,16 @@ export default function App({ onLogout }: { onLogout: () => void }) {
           currentView === 'FACTURE' ||
           currentView === 'PROFORMA' ||
           currentView === 'BONS_LIVRAISON') && (
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-7xl mx-auto w-full z-10">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+          <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+            {/*
+              `shrink-0` sur l'en-tete et `flex-1` sur le tableau: sans cela
+              l'en-tete (dépôt, règlement, livreur, bandeau client) prenait la
+              place qu'il voulait et le tableau des lignes se retrouvait réduit
+              à deux ou trois rangées — le reproche principal du propriétaire.
+              La largeur maximale saute aussi: sur un poste de saisie, la place
+              perdue sur les côtés est de la place en moins pour les colonnes.
+            */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col gap-2 shrink-0">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-3">
                   <span className="font-extrabold text-slate-900 text-base">
@@ -3815,34 +4022,20 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                   </select>
                 </div>
 
-                <div className="col-span-12 bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">
-                      {isPurchaseView ? 'Fournisseur:' : 'Client:'}
-                    </span>
-                    {selectedPartner ? (
-                      <>
-                        <span className="font-mono font-bold bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[#0F5B38]">
-                          {selectedPartner.code}
-                        </span>
-                        <span className="font-bold text-slate-800">{selectedPartner.raisonSociale}</span>
-                      </>
-                    ) : (
-                      <span className="text-slate-400">Aucun sélectionné</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setShowPartnerModal(true)}
-                    className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-lg transition shadow-2xs text-xs"
-                  >
-                    {isPurchaseView ? 'Changer Fournisseur' : 'Changer Client'}
-                  </button>
+                <div className="col-span-12">
+                  <PartenaireBandeau
+                    partner={selectedPartner}
+                    categories={categories}
+                    zones={zones}
+                    estAchat={isPurchaseView}
+                    onChanger={() => setShowPartnerModal(true)}
+                  />
                 </div>
               </div>
             </div>
 
             {/* PRODUCT LINES TABLE */}
-            <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col">
+            <div className="flex-1 min-h-[240px] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col">
               <div className="overflow-auto flex-1">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 text-[11px]">

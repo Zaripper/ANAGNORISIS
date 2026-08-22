@@ -37,6 +37,8 @@ interface FormState {
   mainSupplierId: string;
   preferred: boolean;
   suiviLot: boolean;
+  ppa: string;
+  tauxUGAutorise: string;
   maxQtyPerClient: string;
   prices: PriceRow[];
 }
@@ -57,6 +59,8 @@ function emptyForm(categories: PartnerCategoryOpt[]): FormState {
     mainSupplierId: '',
     preferred: false,
     suiviLot: false,
+    ppa: '',
+    tauxUGAutorise: '',
     maxQtyPerClient: '',
     prices: categories.map((c) => ({ categoryId: c.id, policy: 'PRIX_SAISI' as PricePolicy, priceHT: '', taux: '' }))
   };
@@ -76,6 +80,8 @@ function formFromArticle(a: Article, categories: PartnerCategoryOpt[]): FormStat
     mainSupplierId: a.mainSupplierId ?? '',
     preferred: Boolean(a.preferred),
     suiviLot: Boolean(a.suiviLot),
+    ppa: a.ppa ? String(a.ppa) : '',
+    tauxUGAutorise: a.tauxUGAutorise ? String(a.tauxUGAutorise) : '',
     maxQtyPerClient: a.maxQtyPerClient == null ? '' : String(a.maxQtyPerClient),
     prices: categories.map((c) => {
       const p = a.pricesByCategory[c.id];
@@ -161,6 +167,8 @@ export function ArticlesFichierScreen({
       mainSupplierId: form.mainSupplierId || null,
       preferred: form.preferred,
       suiviLot: form.suiviLot,
+      ppa: Number(form.ppa.replace(',', '.')) || 0,
+      tauxUGAutorise: Number(form.tauxUGAutorise.replace(',', '.')) || 0,
       maxQtyPerClient: form.maxQtyPerClient.trim() === '' ? null : Math.max(1, Math.floor(Number(form.maxQtyPerClient) || 1)),
       prices: form.prices
         // Une ligne sans prix ni taux n'est pas un tarif: on ne la crée pas.
@@ -341,6 +349,8 @@ function ArticleIdentity({
           <div className="col-span-2 md:col-span-4">
             <ReadField label="Libellé" value={selected.designation} />
           </div>
+          <ReadField label="PPA" value={selected.ppa ? money(num(selected.ppa)) : '—'} />
+          <ReadField label="Taux d'UG autorisé" value={selected.tauxUGAutorise ? `${num(selected.tauxUGAutorise)} %` : '—'} />
           <ReadField label="Taux de réfaction" value={`${num(selected.tauxRefaction)} %`} />
           <ReadField label="Sécurité" value={selected.securite == null ? '—' : String(selected.securite)} />
           <ReadField label="Fournisseur" value={selected.mainSupplierName || '—'} />
@@ -376,6 +386,16 @@ function ArticleIdentity({
             <Input value={form.designation} onChange={(e) => onChange({ designation: e.target.value })} />
           </Field>
         </div>
+        <Field label="PPA" hint="Prix public de référence, affiché à la saisie.">
+          <Input value={form.ppa} onChange={(e) => onChange({ ppa: e.target.value })} className="text-right font-mono" />
+        </Field>
+        <Field label="Taux d'UG autorisé (%)" hint="Marge d'unités gratuites accordée sur cet article.">
+          <Input
+            value={form.tauxUGAutorise}
+            onChange={(e) => onChange({ tauxUGAutorise: e.target.value })}
+            className="text-right font-mono"
+          />
+        </Field>
         <Field label="Taux de réfaction (%)">
           <Input value={form.tauxRefaction} onChange={(e) => onChange({ tauxRefaction: e.target.value })} className="text-right font-mono" />
         </Field>

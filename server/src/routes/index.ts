@@ -205,7 +205,20 @@ api.get('/articles', async (req, res) => {
       where: q
         ? { OR: [{ code: { contains: q, mode: 'insensitive' } }, { designation: { contains: q, mode: 'insensitive' } }, { barcode: { contains: q } }] }
         : undefined,
-      include: { prices: { include: { category: true } }, stocks: { include: { depot: true } }, mainSupplier: true },
+      include: {
+        prices: { include: { category: true } },
+        stocks: { include: { depot: true } },
+        mainSupplier: true,
+        // Le lot qui perime le plus tot: c'est celui qui partira en premier
+        // (FEFO), donc la seule date qui interesse le vendeur au moment de
+        // choisir l'article.
+        lots: {
+          where: { qtyInStock: { gt: 0 } },
+          orderBy: { datePeremption: 'asc' },
+          take: 1,
+          select: { numeroLot: true, datePeremption: true }
+        }
+      },
       orderBy: { designation: 'asc' },
       take: limit,
       skip: offset
@@ -247,6 +260,8 @@ api.post('/articles', requireRole('ADMINISTRATEUR'), async (req, res) => {
         mainSupplierId: input.mainSupplierId ?? null,
         preferred: input.preferred ?? false,
         suiviLot: input.suiviLot ?? false,
+        ppa: input.ppa ?? 0,
+        tauxUGAutorise: input.tauxUGAutorise ?? 0,
         maxQtyPerClient: input.maxQtyPerClient ?? null,
         prices: { create: input.prices }
       },

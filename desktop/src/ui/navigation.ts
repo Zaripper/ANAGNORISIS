@@ -85,16 +85,15 @@ export type ScreenId =
   | 'MONTANTS_BLOCAGE'
   | 'REORGANISATION_STOCKS'
   | 'IMPRIMANTE'
-  // ?
-  | 'A_PROPOS';
+  // ?;
 
-export type ScreenGroup = 'Accueil' | 'Caisse' | 'Fichier' | 'Mouvement' | 'Consultation' | 'Outils' | 'Aide';
+export type ScreenGroup = 'Accueil' | 'Caisse' | 'Fichier' | 'Mouvement' | 'Consultation' | 'Outils';
 
 /**
  * Ordre du rail, repris du logiciel actuel. 'Accueil' n'y figure pas: il a son
  * propre bouton en tête de rail.
  */
-export const SCREEN_GROUPS: ScreenGroup[] = ['Fichier', 'Mouvement', 'Consultation', 'Outils', 'Aide', 'Caisse'];
+export const SCREEN_GROUPS: ScreenGroup[] = ['Fichier', 'Mouvement', 'Consultation', 'Outils', 'Caisse'];
 
 export const MODULE_META: Record<ScreenGroup, { icon: LucideIcon; hint: string; label?: string }> = {
   Accueil: { icon: LayoutDashboard, hint: "Écran d'accueil" },
@@ -102,8 +101,7 @@ export const MODULE_META: Record<ScreenGroup, { icon: LucideIcon; hint: string; 
   Fichier: { icon: FolderOpen, hint: 'Données de base: articles, partenaires, dépôts…' },
   Mouvement: { icon: Wrench, hint: 'Achats, ventes, stocks, trésorerie' },
   Consultation: { icon: Search, hint: 'États, journaux, analyses, fiscal' },
-  Outils: { icon: Settings, hint: 'Paramètres, utilisateurs, maintenance' },
-  Aide: { icon: HelpCircle, hint: 'À propos', label: '?' }
+  Outils: { icon: Settings, hint: 'Paramètres, utilisateurs, maintenance' }
 };
 
 export const HOME_SCREEN: ScreenId = 'ACCUEIL';
@@ -200,8 +198,6 @@ export const SCREENS: ScreenDef[] = [
   { id: 'REORGANISATION_STOCKS', label: 'Réorganisation des stocks', group: 'Outils', keywords: 'reorganiser depots', implemented: false, roles: ['ADMINISTRATEUR'] },
   { id: 'IMPRIMANTE', label: 'Imprimante', group: 'Outils', keywords: 'impression modeles configuration', implemented: false, roles: ['ADMINISTRATEUR'] },
 
-  // ---------- ? ----------
-  { id: 'A_PROPOS', label: 'À propos', group: 'Aide', keywords: 'version aide raccourcis', implemented: true }
 ];
 
 const BY_ID = new Map(SCREENS.map((s) => [s.id, s]));
