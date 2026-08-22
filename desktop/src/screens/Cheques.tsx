@@ -142,7 +142,7 @@ export function ChequesScreen({
           ? 'Chèques reçus des clients. Le solde est imputé à la remise; la banque au moment de l’encaissement.'
           : 'Chèques émis aux fournisseurs. Le solde est imputé à l’émission; la banque au moment du débit.'
       }
-      maxWidth="max-w-6xl"
+      maxWidth="max-w-full"
       actions={
         <Button variant="primary" onClick={() => setCreating(true)}>
           + Nouveau chèque
@@ -150,7 +150,8 @@ export function ChequesScreen({
       }
     >
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+        {/* Une seule ligne de filtres: empilees, elles repoussaient les donnees vers le bas. */}
+        <div className="px-2 py-1.5 border-b border-slate-100 flex items-center gap-2 flex-wrap">
           <DateRangeFilter
             du={periode.du}
             au={periode.au}
@@ -160,7 +161,7 @@ export function ChequesScreen({
             actif={periode.actif}
           />
         </div>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+        <div className="px-2 py-1.5 border-b border-slate-100 flex items-center gap-2 flex-wrap">
           <div className="flex gap-1">
             {tabs.map((t) => (
               <button
@@ -183,7 +184,7 @@ export function ChequesScreen({
           </span>
         </div>
 
-        <div className="p-3 flex-1 min-h-0">
+        <div className="p-2 flex-1 min-h-0">
           <DataTable
             loading={loading}
             columns={[

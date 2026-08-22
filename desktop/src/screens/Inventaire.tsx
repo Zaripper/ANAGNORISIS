@@ -148,7 +148,7 @@ export function InventaireScreen({
     <Screen
       title="Inventaire physique"
       description="Saisissez les quantités réellement comptées; les écarts génèrent des régularisations validées."
-      maxWidth="max-w-5xl"
+      maxWidth="max-w-full"
       actions={
         <div className="flex items-center gap-3">
           {touched.length > 0 && (
@@ -164,7 +164,7 @@ export function InventaireScreen({
       }
     >
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3">
+        <div className="px-2 py-1.5 border-b border-slate-100 flex items-center gap-3">
           <Select value={effectiveDepot} onChange={(e) => { setDepotId(e.target.value); setCounts({}); }} className="max-w-56" aria-label="Dépôt inventorié">
             {depots.map((d) => (
               <option key={d.id} value={d.id}>

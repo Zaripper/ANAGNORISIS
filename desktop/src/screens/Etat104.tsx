@@ -108,7 +108,7 @@ export function Etat104Screen({ settings }: { settings: CompanySettings }) {
     <Screen
       title="État 104 — Relevé des clients"
       description="Un client par ligne, avec ses identifiants fiscaux et le total de ses opérations sur l'exercice."
-      maxWidth="max-w-6xl"
+      maxWidth="max-w-full"
       actions={
         <div className="flex items-center gap-2">
           <div className="flex gap-1">

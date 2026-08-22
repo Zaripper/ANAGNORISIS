@@ -268,9 +268,9 @@ export function ValidationQueueScreen({
   }
 
   return (
-    <Screen title={title} description={description(queue.length)} maxWidth="max-w-6xl">
+    <Screen title={title} description={description(queue.length)} maxWidth="max-w-full">
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 flex-1 min-h-0">
+        <div className="p-2 flex-1 min-h-0">
           <DocumentsTable
             rows={queue}
             onRowClick={(d) => setApercu(d.id)}
@@ -354,9 +354,17 @@ export function DocumentListScreen({
   const statusChips = ['TOUS', ...(statuses ?? ['OUVERT', 'VALIDE', 'ANNULE', 'EXPIRE'])];
 
   return (
-    <Screen title={title} description={description} maxWidth="max-w-6xl">
+    <Screen title={title} description={description} maxWidth="max-w-full">
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+        {/*
+          Recherche, periode et statuts sur UNE seule ligne. Empilees, les trois
+          barres poussaient la premiere ligne de donnees a plus de 400 px du haut
+          — la moitie de la hauteur utile passait en filtres.
+        */}
+        <div className="px-2 py-1.5 border-b border-slate-100 flex items-center gap-2 flex-wrap">
+          <div className="w-56 shrink-0">
+            <SearchInput value={search} onChange={setSearch} placeholder="Référence, partenaire ou motif…" />
+          </div>
           <DateRangeFilter
             du={periode.du}
             au={periode.au}
@@ -365,11 +373,6 @@ export function DocumentListScreen({
             onReset={periode.reset}
             actif={periode.actif}
           />
-        </div>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3">
-          <div className="flex-1 max-w-sm">
-            <SearchInput value={search} onChange={setSearch} placeholder="Référence, partenaire ou motif…" />
-          </div>
           <div className="flex gap-1">
             {statusChips.map((s) => (
               <button
@@ -385,7 +388,7 @@ export function DocumentListScreen({
           </div>
           <span className="ml-auto text-slate-400 text-[11px]">{rows.length} document(s)</span>
         </div>
-        <div className="p-3 flex-1 min-h-0">
+        <div className="p-2 flex-1 min-h-0">
           <DocumentsTable
             rows={rows}
             onRowClick={(d) => setApercu(d.id)}
@@ -436,10 +439,10 @@ export function MouvementArticleScreen({ articles }: { articles: Article[] }) {
   }, [selected]);
 
   return (
-    <Screen title="Mouvement d'un article" description="Chaque entrée/sortie validée, avec solde courant." maxWidth="max-w-6xl">
+    <Screen title="Mouvement d'un article" description="Chaque entrée/sortie validée, avec solde courant." maxWidth="max-w-full">
       <div className="flex-1 flex gap-4 min-h-0">
         <Card className="w-80 shrink-0" padded={false}>
-          <div className="p-3 border-b border-slate-100">
+          <div className="px-2 py-1.5 border-b border-slate-100">
             <SearchInput value={search} onChange={setSearch} />
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -458,7 +461,7 @@ export function MouvementArticleScreen({ articles }: { articles: Article[] }) {
           </div>
         </Card>
         <Card className="flex-1 min-w-0" padded={false}>
-          <div className="p-3 flex-1 min-h-0">
+          <div className="p-2 flex-1 min-h-0">
             {!selected ? (
               <div className="flex-1 flex items-center justify-center h-full text-slate-400 text-xs">Sélectionnez un article.</div>
             ) : (
@@ -543,11 +546,11 @@ export function ReapproScreen({ articles, onChanged }: { articles: Article[]; on
     <Screen
       title="Articles à réapprovisionner"
       description="Alerte lorsque le stock disponible passe sous le seuil défini par article."
-      maxWidth="max-w-5xl"
+      maxWidth="max-w-full"
       actions={alertCount > 0 ? <Badge tone="danger">{alertCount} alerte(s)</Badge> : <Badge tone="success">Aucune alerte</Badge>}
     >
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 flex-1 min-h-0">
+        <div className="p-2 flex-1 min-h-0">
           <DataTable
             columns={[
               {

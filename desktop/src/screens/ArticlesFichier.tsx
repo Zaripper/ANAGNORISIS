@@ -264,7 +264,7 @@ export function ArticlesFichierScreen({
       <div className="flex-1 flex gap-4 min-h-0">
         {/* ---------------- Liste ---------------- */}
         <Card className="w-80 shrink-0" padded={false}>
-          <div className="p-3 border-b border-slate-100">
+          <div className="px-2 py-1.5 border-b border-slate-100">
             <SearchInput value={search} onChange={setSearch} placeholder="Code, désignation, code-barres…" />
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">

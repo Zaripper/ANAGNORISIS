@@ -124,7 +124,7 @@ export function ReferenceDataScreen<T extends RefEntity>({
       }
     >
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3">
+        <div className="px-2 py-1.5 border-b border-slate-100 flex items-center gap-3">
           <div className="flex-1 max-w-sm">
             <SearchInput value={search} onChange={setSearch} />
           </div>

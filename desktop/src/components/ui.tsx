@@ -84,11 +84,17 @@ export function Screen({
   maxWidth?: string;
 }) {
   return (
-    <div className={cx('flex-1 flex flex-col gap-4 overflow-hidden w-full mx-auto z-10', maxWidth)}>
-      <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-xs flex justify-between items-start gap-4 shrink-0">
+    /*
+     * Espacements resserres apres retour du proprietaire: l'en-tete et les
+     * marges consommaient un tiers de la hauteur utile avant d'afficher la
+     * premiere ligne. Sur un poste de saisie, chaque ligne visible en moins est
+     * un defilement de plus.
+     */
+    <div className={cx('flex-1 flex flex-col gap-2 overflow-hidden w-full mx-auto z-10', maxWidth)}>
+      <div className="bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-xs flex justify-between items-center gap-3 shrink-0">
         <div className="min-w-0">
-          <h1 className="font-extrabold text-slate-900 text-base truncate">{title}</h1>
-          {description && <p className="text-slate-500 text-[11px] mt-1">{description}</p>}
+          <h1 className="font-extrabold text-slate-900 text-[13px] truncate leading-tight">{title}</h1>
+          {description && <p className="text-slate-500 text-[10px] mt-0.5 leading-snug line-clamp-2">{description}</p>}
         </div>
         {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
       </div>
@@ -111,14 +117,14 @@ export function Card({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className={cx('bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col min-h-0', className)}>
+    <div className={cx('bg-white border border-slate-200 rounded-xl shadow-xs flex flex-col min-h-0', className)}>
       {(title || actions) && (
-        <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center gap-3 shrink-0">
+        <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center gap-3 shrink-0">
           {title && <span className="font-bold text-slate-900 text-xs">{title}</span>}
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}
-      <div className={cx(padded ? 'p-4' : '', 'flex-1 min-h-0 flex flex-col')}>{children}</div>
+      <div className={cx(padded ? 'p-3' : '', 'flex-1 min-h-0 flex flex-col')}>{children}</div>
     </div>
   );
 }
@@ -242,11 +248,13 @@ export function useDateRange<T>(rows: T[], getDate: (row: T) => string | Date | 
 }
 
 /**
- * Sélecteur de période: deux dates et trois raccourcis.
+ * Sélecteur de période, compact.
  *
- * `Aujourd'hui` pose la même date des deux côtés — d'où l'importance que la
- * borne de fin couvre la journée entière, sans quoi ce bouton ne rendrait
- * jamais rien.
+ * La première version alignait deux champs date et trois boutons: environ
+ 500 px, qui faisaient passer la barre de filtres à trois lignes et repoussaient
+ * les données à plus de 400 px du haut. Ici un seul menu porte les cas courants,
+ * et les deux dates n'apparaissent que sur « Personnalisé » — c'est-à-dire
+ * rarement.
  */
 export function DateRangeFilter({
   du,
@@ -263,42 +271,66 @@ export function DateRangeFilter({
   onReset: () => void;
   actif: boolean;
 }) {
-  const poser = (bornes: { du: string; au: string }) => {
-    onDu(bornes.du);
-    onAu(bornes.au);
-  };
+  const [personnalise, setPersonnalise] = useState(false);
+
+  const aujourdhui = enDateInput(new Date());
+  const mois = moisCourant();
+  const exercice = exerciceCourant();
+
+  const valeur = !actif
+    ? 'TOUT'
+    : du === aujourdhui && au === aujourdhui
+      ? 'JOUR'
+      : du === mois.du && au === mois.au
+        ? 'MOIS'
+        : du === exercice.du && au === exercice.au
+          ? 'EXERCICE'
+          : 'PERSO';
+
+  function choisir(v: string) {
+    setPersonnalise(v === 'PERSO');
+    if (v === 'TOUT') onReset();
+    else if (v === 'JOUR') {
+      onDu(aujourdhui);
+      onAu(aujourdhui);
+    } else if (v === 'MOIS') {
+      onDu(mois.du);
+      onAu(mois.au);
+    } else if (v === 'EXERCICE') {
+      onDu(exercice.du);
+      onAu(exercice.au);
+    }
+  }
+
+  const montrerDates = personnalise || valeur === 'PERSO';
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Du</label>
-      <input
-        type="date"
-        value={du}
-        onChange={(e) => onDu(e.target.value)}
-        className={cx(CONTROL, FOCUS, 'w-32 py-1')}
-        aria-label="Date de début"
-      />
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Au</label>
-      <input
-        type="date"
-        value={au}
-        onChange={(e) => onAu(e.target.value)}
-        className={cx(CONTROL, FOCUS, 'w-32 py-1')}
-        aria-label="Date de fin"
-      />
-      <Button size="sm" variant="secondary" onClick={() => poser({ du: enDateInput(new Date()), au: enDateInput(new Date()) })}>
-        Aujourd&rsquo;hui
-      </Button>
-      <Button size="sm" variant="secondary" onClick={() => poser(moisCourant())}>
-        Ce mois
-      </Button>
-      <Button size="sm" variant="secondary" onClick={() => poser(exerciceCourant())}>
-        Exercice
-      </Button>
-      {actif && (
-        <Button size="sm" variant="ghost" onClick={onReset}>
-          Tout
-        </Button>
+    <div className="flex items-center gap-1.5">
+      <Select value={valeur} onChange={(e) => choisir(e.target.value)} className="w-32 py-1">
+        <option value="TOUT">Toute période</option>
+        <option value="JOUR">Aujourd&rsquo;hui</option>
+        <option value="MOIS">Ce mois</option>
+        <option value="EXERCICE">Exercice</option>
+        <option value="PERSO">Personnalisé…</option>
+      </Select>
+
+      {montrerDates && (
+        <>
+          <input
+            type="date"
+            value={du}
+            onChange={(e) => onDu(e.target.value)}
+            className={cx(CONTROL, FOCUS, 'w-32 py-1')}
+            aria-label="Date de début"
+          />
+          <input
+            type="date"
+            value={au}
+            onChange={(e) => onAu(e.target.value)}
+            className={cx(CONTROL, FOCUS, 'w-32 py-1')}
+            aria-label="Date de fin"
+          />
+        </>
       )}
     </div>
   );
@@ -439,7 +471,7 @@ export function DataTable<T>({
         <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 z-10">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={cx('p-3 font-semibold text-[10px] uppercase tracking-wide', alignClass(c.align))} style={c.width ? { width: c.width } : undefined}>
+              <th key={c.key} className={cx('px-2 py-1.5 font-semibold text-[10px] uppercase tracking-wide', alignClass(c.align))} style={c.width ? { width: c.width } : undefined}>
                 {c.header}
               </th>
             ))}
@@ -468,7 +500,7 @@ export function DataTable<T>({
                   )}
                 >
                   {columns.map((c) => (
-                    <td key={c.key} className={cx('p-3', alignClass(c.align))}>
+                    <td key={c.key} className={cx('px-2 py-1.5', alignClass(c.align))}>
                       {c.render(row)}
                     </td>
                   ))}

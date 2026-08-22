@@ -80,7 +80,7 @@ export function StocksScreen() {
           ? `État reconstitué à la fermeture du ${new Date(data!.date!).toLocaleDateString('fr-FR')}. Les quantités réservées ne sont pas historisées et ne sont donc pas affichées.`
           : 'État actuel. Chaque dépôt affiche « disponible / physique »; la différence est ce qui est réservé par des documents ouverts.'
       }
-      maxWidth="max-w-6xl"
+      maxWidth="max-w-full"
       actions={
         <div className="flex items-center gap-2">
           <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Au</label>
@@ -110,7 +110,7 @@ export function StocksScreen() {
       )}
 
       <Card className="flex-1 min-h-0" padded={false}>
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3">
+        <div className="px-2 py-1.5 border-b border-slate-100 flex items-center gap-3">
           <div className="flex-1 max-w-sm">
             <SearchInput value={search} onChange={setSearch} placeholder="Code ou désignation…" />
           </div>
@@ -120,7 +120,7 @@ export function StocksScreen() {
           </span>
         </div>
 
-        <div className="p-3 flex-1 min-h-0">
+        <div className="p-2 flex-1 min-h-0">
           <DataTable
             columns={[
               { key: 'code', header: 'Code', render: (l: LigneStock) => <span className="font-mono font-bold text-[#0F5B38]">{l.code}</span> },

@@ -358,10 +358,10 @@ function PartnerSelectModal({
                 {/* Le solde et le plafond décident si l'on peut vendre: ils se lisent ici,
                     pas après avoir choisi le client. */}
                 <tr>
-                  <th className="p-3">Code</th>
-                  <th className="p-3">Raison Sociale</th>
-                  <th className="p-3 text-right">Solde</th>
-                  <th className="p-3 text-right">Plafond</th>
+                  <th className="px-2 py-1.5">Code</th>
+                  <th className="px-2 py-1.5">Raison Sociale</th>
+                  <th className="px-2 py-1.5 text-right">Solde</th>
+                  <th className="px-2 py-1.5 text-right">Plafond</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -378,15 +378,15 @@ function PartnerSelectModal({
                       }}
                       className={`cursor-pointer transition ${i === index ? 'bg-[#0F5B38]/10' : 'hover:bg-[#0F5B38]/5'}`}
                     >
-                      <td className="p-3 font-mono font-bold text-[#0F5B38]">{p.code}</td>
-                      <td className="p-3 font-medium text-slate-800">
+                      <td className="px-2 py-1.5 font-mono font-bold text-[#0F5B38]">{p.code}</td>
+                      <td className="px-2 py-1.5 font-medium text-slate-800">
                         {p.raisonSociale}
                         {depasse && <span className="ml-2 text-[10px] font-bold text-rose-600">plafond dépassé</span>}
                       </td>
                       <td className={`p-3 text-right font-mono ${depasse ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
                         {money(p.balance)}
                       </td>
-                      <td className="p-3 text-right font-mono text-slate-400">
+                      <td className="px-2 py-1.5 text-right font-mono text-slate-400">
                         {p.seuilAutorise > 0 ? money(p.seuilAutorise) : '—'}
                       </td>
                     </tr>
@@ -461,14 +461,14 @@ function ArticleSelectModal({
                   quel prix public, et quelle marge d'UG on a.
                 */}
                 <tr>
-                  <th className="p-3">Code</th>
-                  <th className="p-3">Désignation</th>
-                  <th className="p-3 text-center">Stock</th>
-                  <th className="p-3 text-center" title="Taux d'unités gratuites autorisé">UG max</th>
-                  <th className="p-3 text-center">Péremption</th>
-                  <th className="p-3 text-right">PPA</th>
-                  <th className="p-3 text-right">Coût d'achat</th>
-                  <th className="p-3 text-right">Prix HT</th>
+                  <th className="px-2 py-1.5">Code</th>
+                  <th className="px-2 py-1.5">Désignation</th>
+                  <th className="px-2 py-1.5 text-center">Stock</th>
+                  <th className="px-2 py-1.5 text-center" title="Taux d'unités gratuites autorisé">UG max</th>
+                  <th className="px-2 py-1.5 text-center">Péremption</th>
+                  <th className="px-2 py-1.5 text-right">PPA</th>
+                  <th className="px-2 py-1.5 text-right">Coût d'achat</th>
+                  <th className="px-2 py-1.5 text-right">Prix HT</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -483,23 +483,23 @@ function ArticleSelectModal({
                     }}
                     className={`cursor-pointer transition ${i === index ? 'bg-[#0F5B38]/10' : 'hover:bg-[#0F5B38]/5'}`}
                   >
-                    <td className="p-3 font-mono font-bold text-slate-900">{art.code}</td>
-                    <td className="p-3 font-medium text-slate-800">{art.designation}</td>
-                    <td className="p-3 text-center">
+                    <td className="px-2 py-1.5 font-mono font-bold text-slate-900">{art.code}</td>
+                    <td className="px-2 py-1.5 font-medium text-slate-800">{art.designation}</td>
+                    <td className="px-2 py-1.5 text-center">
                       <span className={`font-mono font-bold ${art.stockGlobal > 0 ? 'text-slate-700' : 'text-rose-600'}`}>
                         {art.stockGlobal}
                       </span>
                     </td>
-                    <td className="p-3 text-center font-mono text-slate-500">
+                    <td className="px-2 py-1.5 text-center font-mono text-slate-500">
                       {art.tauxUGAutorise ? `${art.tauxUGAutorise}%` : '—'}
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       <Peremption lots={art.lots} />
                     </td>
-                    <td className="p-3 text-right font-mono text-slate-500">{art.ppa ? art.ppa.toFixed(2) : '—'}</td>
-                    <td className="p-3 text-right font-mono text-slate-500">{art.pump.toFixed(2)}</td>
-                    <td className="p-3 text-right font-mono font-bold text-[#0F5B38]">{art.priceHT.toFixed(2)}</td>
-                    <td className="p-3 text-center hidden">
+                    <td className="px-2 py-1.5 text-right font-mono text-slate-500">{art.ppa ? art.ppa.toFixed(2) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-slate-500">{art.pump.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono font-bold text-[#0F5B38]">{art.priceHT.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-center hidden">
                       <span
                         className={`px-2.5 py-1 rounded-full font-mono text-[10px] font-bold ${
                           art.stockGlobal > 0 ? 'bg-emerald-50 text-[#0F5B38]' : 'bg-rose-50 text-rose-600'
@@ -592,17 +592,17 @@ function ReserveArticleModal({
               <table className="w-full text-left">
                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-100 text-slate-500 font-medium text-[11px]">
                   <tr>
-                    <th className="p-3">Code</th>
-                    <th className="p-3">Désignation</th>
-                    <th className="p-3 text-center">Stock Total</th>
+                    <th className="px-2 py-1.5">Code</th>
+                    <th className="px-2 py-1.5">Désignation</th>
+                    <th className="px-2 py-1.5 text-center">Stock Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredArticles.map((art) => (
                     <tr key={art.id} onClick={() => pickArticle(art)} className="hover:bg-[#0F5B38]/5 cursor-pointer transition">
-                      <td className="p-3 font-mono font-bold text-slate-900">{art.code}</td>
-                      <td className="p-3 font-medium text-slate-800">{art.designation}</td>
-                      <td className="p-3 text-center font-mono">{art.stockGlobal}</td>
+                      <td className="px-2 py-1.5 font-mono font-bold text-slate-900">{art.code}</td>
+                      <td className="px-2 py-1.5 font-medium text-slate-800">{art.designation}</td>
+                      <td className="px-2 py-1.5 text-center font-mono">{art.stockGlobal}</td>
                     </tr>
                   ))}
                   {filteredArticles.length === 0 && (
@@ -632,11 +632,11 @@ function ReserveArticleModal({
               <table className="w-full text-left">
                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-100 text-slate-500 font-medium text-[11px]">
                   <tr>
-                    <th className="p-3">Dépôt</th>
-                    <th className="p-3 text-center">En dépôt</th>
-                    <th className="p-3 text-center">Réservée</th>
-                    <th className="p-3 text-center">En stock</th>
-                    <th className="p-3 text-center">À réserver</th>
+                    <th className="px-2 py-1.5">Dépôt</th>
+                    <th className="px-2 py-1.5 text-center">En dépôt</th>
+                    <th className="px-2 py-1.5 text-center">Réservée</th>
+                    <th className="px-2 py-1.5 text-center">En stock</th>
+                    <th className="px-2 py-1.5 text-center">À réserver</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -645,11 +645,11 @@ function ReserveArticleModal({
                     const available = s.qtyInStock - s.qtyReserved;
                     return (
                       <tr key={d.id}>
-                        <td className="p-3 font-medium text-slate-800">{d.name}</td>
-                        <td className="p-3 text-center font-mono">{s.qtyInStock}</td>
-                        <td className="p-3 text-center font-mono text-amber-600">{s.qtyReserved}</td>
-                        <td className="p-3 text-center font-mono font-bold text-[#0F5B38]">{available}</td>
-                        <td className="p-3 text-center">
+                        <td className="px-2 py-1.5 font-medium text-slate-800">{d.name}</td>
+                        <td className="px-2 py-1.5 text-center font-mono">{s.qtyInStock}</td>
+                        <td className="px-2 py-1.5 text-center font-mono text-amber-600">{s.qtyReserved}</td>
+                        <td className="px-2 py-1.5 text-center font-mono font-bold text-[#0F5B38]">{available}</td>
+                        <td className="px-2 py-1.5 text-center">
                           <input
                             type="number"
                             min={0}
@@ -739,8 +739,8 @@ function PrixArticlesView({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
               <tr>
-                <th className="p-2 px-3">Code</th>
-                <th className="p-2 px-3">Désignation</th>
+                <th className="px-2 py-1.5">Code</th>
+                <th className="px-2 py-1.5">Désignation</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -750,8 +750,8 @@ function PrixArticlesView({
                   onClick={() => setSelectedId(a.id)}
                   className={`cursor-pointer transition ${selected?.id === a.id ? 'bg-[#0F5B38]/10' : 'hover:bg-slate-50'}`}
                 >
-                  <td className="p-2 px-3 font-mono font-bold text-slate-800">{a.code}</td>
-                  <td className="p-2 px-3 text-slate-700">{a.designation}</td>
+                  <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{a.code}</td>
+                  <td className="px-2 py-1.5 text-slate-700">{a.designation}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -774,7 +774,7 @@ function PrixArticlesView({
           </div>
         ) : (
           <>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-mono font-bold text-[#0F5B38]">{selected.code}</span>
                 <span className="font-extrabold text-slate-900">{selected.designation}</span>
@@ -810,10 +810,10 @@ function PrixArticlesView({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
                     <tr>
-                      <th className="p-3">Catégorie</th>
-                      <th className="p-3 text-right">Taux %</th>
-                      <th className="p-3 text-right">Prix unit. HT</th>
-                      <th className="p-3 text-right">Prix unit. TTC</th>
+                      <th className="px-2 py-1.5">Catégorie</th>
+                      <th className="px-2 py-1.5 text-right">Taux %</th>
+                      <th className="px-2 py-1.5 text-right">Prix unit. HT</th>
+                      <th className="px-2 py-1.5 text-right">Prix unit. TTC</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -821,10 +821,10 @@ function PrixArticlesView({
                       const price = selected.pricesByCategory[c.id];
                       return (
                         <tr key={c.id}>
-                          <td className="p-3 font-medium text-slate-800">{c.label}</td>
-                          <td className="p-3 text-right font-mono text-slate-400">0,00</td>
-                          <td className="p-3 text-right font-mono font-semibold text-[#0F5B38]">{(price?.priceHT ?? 0).toFixed(2)}</td>
-                          <td className="p-3 text-right font-mono">{(price?.priceTTC ?? 0).toFixed(2)}</td>
+                          <td className="px-2 py-1.5 font-medium text-slate-800">{c.label}</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-slate-400">0,00</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold text-[#0F5B38]">{(price?.priceHT ?? 0).toFixed(2)}</td>
+                          <td className="px-2 py-1.5 text-right font-mono">{(price?.priceTTC ?? 0).toFixed(2)}</td>
                         </tr>
                       );
                     })}
@@ -839,10 +839,10 @@ function PrixArticlesView({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                     <tr>
-                      <th className="p-3">Dépôt</th>
-                      <th className="p-3 text-right">Quantité</th>
-                      <th className="p-3 text-right">Qté réservée</th>
-                      <th className="p-3 text-right">Stock</th>
+                      <th className="px-2 py-1.5">Dépôt</th>
+                      <th className="px-2 py-1.5 text-right">Quantité</th>
+                      <th className="px-2 py-1.5 text-right">Qté réservée</th>
+                      <th className="px-2 py-1.5 text-right">Stock</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -850,10 +850,10 @@ function PrixArticlesView({
                       const s = selected.stocksByDepot[d.id] ?? { qtyInStock: 0, qtyReserved: 0 };
                       return (
                         <tr key={d.id}>
-                          <td className="p-3 font-medium text-slate-800">{d.name}</td>
-                          <td className="p-3 text-right font-mono">{s.qtyInStock}</td>
-                          <td className="p-3 text-right font-mono text-amber-600">{s.qtyReserved}</td>
-                          <td className="p-3 text-right font-mono font-bold text-[#0F5B38]">{s.qtyInStock - s.qtyReserved}</td>
+                          <td className="px-2 py-1.5 font-medium text-slate-800">{d.name}</td>
+                          <td className="px-2 py-1.5 text-right font-mono">{s.qtyInStock}</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-amber-600">{s.qtyReserved}</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-[#0F5B38]">{s.qtyInStock - s.qtyReserved}</td>
                         </tr>
                       );
                     })}
@@ -1210,8 +1210,8 @@ function RegulesScreen({
   const totalQte = lines.reduce((acc, l) => acc + l.qte, 0);
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-col gap-3">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <span className="font-extrabold text-slate-900 text-base">
             Régularisation de Stock — {isPlus ? 'Entrée (Plus)' : 'Sortie (Moins)'}
@@ -1284,24 +1284,24 @@ function RegulesScreen({
         </button>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="p-3">Code</th>
-              <th className="p-3">Désignation</th>
-              <th className="p-3 text-center">Quantité</th>
-              {isPlus && <th className="p-3 text-center w-56">Lot / péremption</th>}
-              <th className="p-3 text-right">P.U.M.P.</th>
-              <th className="p-3 text-center w-12"></th>
+              <th className="px-2 py-1.5">Code</th>
+              <th className="px-2 py-1.5">Désignation</th>
+              <th className="px-2 py-1.5 text-center">Quantité</th>
+              {isPlus && <th className="px-2 py-1.5 text-center w-56">Lot / péremption</th>}
+              <th className="px-2 py-1.5 text-right">P.U.M.P.</th>
+              <th className="px-2 py-1.5 text-center w-12"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {lines.map((l) => (
               <tr key={l.articleId}>
-                <td className="p-3 font-mono font-bold text-slate-800">{l.code}</td>
-                <td className="p-3 font-medium text-slate-900">{l.designation}</td>
-                <td className="p-3 text-center">
+                <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{l.code}</td>
+                <td className="px-2 py-1.5 font-medium text-slate-900">{l.designation}</td>
+                <td className="px-2 py-1.5 text-center">
                   <input
                     type="number"
                     min={1}
@@ -1311,7 +1311,7 @@ function RegulesScreen({
                   />
                 </td>
                 {isPlus && (
-                  <td className="p-3">
+                  <td className="px-2 py-1.5">
                     {l.suiviLot ? (
                       <div className="flex gap-1.5">
                         <input
@@ -1343,8 +1343,8 @@ function RegulesScreen({
                     )}
                   </td>
                 )}
-                <td className="p-3 text-right font-mono text-slate-400">{l.pump.toFixed(2)}</td>
-                <td className="p-3 text-center">
+                <td className="px-2 py-1.5 text-right font-mono text-slate-400">{l.pump.toFixed(2)}</td>
+                <td className="px-2 py-1.5 text-center">
                   <button onClick={() => removeLine(l.articleId)} className="text-slate-300 hover:text-rose-600 font-bold p-1 transition">
                     ✕
                   </button>
@@ -1362,7 +1362,7 @@ function RegulesScreen({
         </table>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <span className="text-xs font-semibold text-slate-500">Quantité totale à {isPlus ? 'ajouter' : 'retirer'}: {totalQte}</span>
         <button
           onClick={handleSave}
@@ -1494,8 +1494,8 @@ function TransfertScreen({
   const totalQte = lines.reduce((acc, l) => acc + l.qte, 0);
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-col gap-3">
         <span className="font-extrabold text-slate-900 text-base border-b border-slate-100 pb-3">Transfert Inter-Dépôts</span>
 
         {notice && <div className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{notice}</div>}
@@ -1548,23 +1548,23 @@ function TransfertScreen({
         </button>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="p-3">Code</th>
-              <th className="p-3">Désignation</th>
-              <th className="p-3 text-center">Quantité</th>
-              <th className="p-3 text-right">P.U.M.P.</th>
-              <th className="p-3 text-center w-12"></th>
+              <th className="px-2 py-1.5">Code</th>
+              <th className="px-2 py-1.5">Désignation</th>
+              <th className="px-2 py-1.5 text-center">Quantité</th>
+              <th className="px-2 py-1.5 text-right">P.U.M.P.</th>
+              <th className="px-2 py-1.5 text-center w-12"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {lines.map((l) => (
               <tr key={l.articleId}>
-                <td className="p-3 font-mono font-bold text-slate-800">{l.code}</td>
-                <td className="p-3 font-medium text-slate-900">{l.designation}</td>
-                <td className="p-3 text-center">
+                <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{l.code}</td>
+                <td className="px-2 py-1.5 font-medium text-slate-900">{l.designation}</td>
+                <td className="px-2 py-1.5 text-center">
                   <input
                     type="number"
                     min={1}
@@ -1573,8 +1573,8 @@ function TransfertScreen({
                     className="w-16 text-center border border-slate-200 rounded-lg font-bold font-mono py-1 focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/20"
                   />
                 </td>
-                <td className="p-3 text-right font-mono text-slate-400">{l.pump.toFixed(2)}</td>
-                <td className="p-3 text-center">
+                <td className="px-2 py-1.5 text-right font-mono text-slate-400">{l.pump.toFixed(2)}</td>
+                <td className="px-2 py-1.5 text-center">
                   <button onClick={() => removeLine(l.articleId)} className="text-slate-300 hover:text-rose-600 font-bold p-1 transition">
                     ✕
                   </button>
@@ -1592,7 +1592,7 @@ function TransfertScreen({
         </table>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <span className="text-xs font-semibold text-slate-500">Quantité totale à transférer: {totalQte}</span>
         <button
           onClick={handleSave}
@@ -1703,8 +1703,8 @@ function PartnerSettlementScreen({
   }
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-4xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-col gap-3">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <span className="font-extrabold text-slate-900 text-base">{title}</span>
           <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
@@ -1868,8 +1868,8 @@ function CashJournalTable({ title, transactions }: { title: string; transactions
   const solde = totalRecette - totalDepense;
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <span className="font-extrabold text-slate-900 text-base">{title}</span>
         <div className="flex gap-6 text-xs">
           <div>
@@ -1902,26 +1902,26 @@ function CashJournalTable({ title, transactions }: { title: string; transactions
         <span className="ml-auto text-slate-400 text-[11px]">{filtered.length} écriture(s)</span>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="p-3">Date</th>
-              <th className="p-3">Description</th>
-              <th className="p-3">Partenaire</th>
-              <th className="p-3">Mode</th>
-              <th className="p-3 text-center">Type</th>
-              <th className="p-3 text-right">Montant</th>
+              <th className="px-2 py-1.5">Date</th>
+              <th className="px-2 py-1.5">Description</th>
+              <th className="px-2 py-1.5">Partenaire</th>
+              <th className="px-2 py-1.5">Mode</th>
+              <th className="px-2 py-1.5 text-center">Type</th>
+              <th className="px-2 py-1.5 text-right">Montant</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((t) => (
               <tr key={t.id}>
-                <td className="p-3">{new Date(t.createdAt).toLocaleString('fr-FR')}</td>
-                <td className="p-3 font-medium text-slate-800">{t.description}</td>
-                <td className="p-3 text-slate-500">{t.partner ? `${t.partner.code} - ${t.partner.raisonSociale}` : '—'}</td>
-                <td className="p-3 text-slate-500">{t.paymentMode}</td>
-                <td className="p-3 text-center">
+                <td className="px-2 py-1.5">{new Date(t.createdAt).toLocaleString('fr-FR')}</td>
+                <td className="px-2 py-1.5 font-medium text-slate-800">{t.description}</td>
+                <td className="px-2 py-1.5 text-slate-500">{t.partner ? `${t.partner.code} - ${t.partner.raisonSociale}` : '—'}</td>
+                <td className="px-2 py-1.5 text-slate-500">{t.paymentMode}</td>
+                <td className="px-2 py-1.5 text-center">
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       t.type === 'RECETTE' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
@@ -2042,7 +2042,7 @@ function SuiviPartenaireScreen({ partners }: { partners: Partner[] }) {
 
         {!loading && detail && (
           <>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-mono font-bold text-[#0F5B38]">{detail.code}</span>
                 <span className="font-extrabold text-slate-900">{detail.raisonSociale}</span>
@@ -2069,28 +2069,28 @@ function SuiviPartenaireScreen({ partners }: { partners: Partner[] }) {
               </div>
             </div>
 
-            <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+            <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
               <div className="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">Documents</div>
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
                   <tr>
-                    <th className="p-2 px-3">Référence</th>
-                    <th className="p-2 px-3">Type</th>
-                    <th className="p-2 px-3 text-center">Statut</th>
-                    <th className="p-2 px-3 text-right">Total TTC</th>
-                    <th className="p-2 px-3">Date</th>
+                    <th className="px-2 py-1.5">Référence</th>
+                    <th className="px-2 py-1.5">Type</th>
+                    <th className="px-2 py-1.5 text-center">Statut</th>
+                    <th className="px-2 py-1.5 text-right">Total TTC</th>
+                    <th className="px-2 py-1.5">Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {detail.documents.map((doc) => (
                     <tr key={doc.id}>
-                      <td className="p-2 px-3 font-mono font-bold text-slate-800">{doc.reference}</td>
-                      <td className="p-2 px-3 text-slate-600">{doc.type}</td>
-                      <td className="p-2 px-3 text-center">
+                      <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{doc.reference}</td>
+                      <td className="px-2 py-1.5 text-slate-600">{doc.type}</td>
+                      <td className="px-2 py-1.5 text-center">
                         <StatusBadgeSmall status={doc.status} />
                       </td>
-                      <td className="p-2 px-3 text-right font-mono">{num(doc.totalTTC).toFixed(2)}</td>
-                      <td className="p-2 px-3">{new Date(doc.createdAt).toLocaleDateString('fr-FR')}</td>
+                      <td className="px-2 py-1.5 text-right font-mono">{num(doc.totalTTC).toFixed(2)}</td>
+                      <td className="px-2 py-1.5">{new Date(doc.createdAt).toLocaleDateString('fr-FR')}</td>
                     </tr>
                   ))}
                   {detail.documents.length === 0 && (
@@ -2109,20 +2109,20 @@ function SuiviPartenaireScreen({ partners }: { partners: Partner[] }) {
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                   <tr>
-                    <th className="p-2 px-3">Date</th>
-                    <th className="p-2 px-3">Description</th>
-                    <th className="p-2 px-3">Mode</th>
-                    <th className="p-2 px-3 text-center">Type</th>
-                    <th className="p-2 px-3 text-right">Montant</th>
+                    <th className="px-2 py-1.5">Date</th>
+                    <th className="px-2 py-1.5">Description</th>
+                    <th className="px-2 py-1.5">Mode</th>
+                    <th className="px-2 py-1.5 text-center">Type</th>
+                    <th className="px-2 py-1.5 text-right">Montant</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {detail.cashTransactions.map((t) => (
                     <tr key={t.id}>
-                      <td className="p-2 px-3">{new Date(t.createdAt).toLocaleDateString('fr-FR')}</td>
-                      <td className="p-2 px-3">{t.description}</td>
-                      <td className="p-2 px-3">{t.paymentMode}</td>
-                      <td className="p-2 px-3 text-center">
+                      <td className="px-2 py-1.5">{new Date(t.createdAt).toLocaleDateString('fr-FR')}</td>
+                      <td className="px-2 py-1.5">{t.description}</td>
+                      <td className="px-2 py-1.5">{t.paymentMode}</td>
+                      <td className="px-2 py-1.5 text-center">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             t.type === 'RECETTE' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
@@ -2131,7 +2131,7 @@ function SuiviPartenaireScreen({ partners }: { partners: Partner[] }) {
                           {t.type}
                         </span>
                       </td>
-                      <td className="p-2 px-3 text-right font-mono font-bold">{num(t.amount).toFixed(2)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono font-bold">{num(t.amount).toFixed(2)}</td>
                     </tr>
                   ))}
                   {detail.cashTransactions.length === 0 && (
@@ -2172,19 +2172,19 @@ function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
       <table className="w-full text-left border-collapse text-xs">
         <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
           <tr>
-            <th className="p-2 px-3">Code</th>
-            <th className="p-2 px-3">Raison Sociale</th>
-            <th className="p-2 px-3">Catégorie</th>
-            <th className="p-2 px-3 text-right">Montant</th>
+            <th className="px-2 py-1.5">Code</th>
+            <th className="px-2 py-1.5">Raison Sociale</th>
+            <th className="px-2 py-1.5">Catégorie</th>
+            <th className="px-2 py-1.5 text-right">Montant</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((p) => (
             <tr key={p.id}>
-              <td className="p-2 px-3 font-mono font-bold text-slate-800">{p.code}</td>
-              <td className="p-2 px-3">{p.raisonSociale}</td>
-              <td className="p-2 px-3 text-slate-500">{p.categoryLabel}</td>
-              <td className="p-2 px-3 text-right font-mono font-bold">{p.balance.toFixed(2)} DZD</td>
+              <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{p.code}</td>
+              <td className="px-2 py-1.5">{p.raisonSociale}</td>
+              <td className="px-2 py-1.5 text-slate-500">{p.categoryLabel}</td>
+              <td className="px-2 py-1.5 text-right font-mono font-bold">{p.balance.toFixed(2)} DZD</td>
             </tr>
           ))}
           {filtered.length === 0 && (
@@ -2200,8 +2200,8 @@ function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <span className="font-extrabold text-slate-900 text-base">Créances et Dettes</span>
         <div className="flex gap-6 text-xs">
           <div>
@@ -2221,11 +2221,11 @@ function CreancesDettesScreen({ partners }: { partners: Partner[] }) {
         </div>
       </div>
       <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
           <div className="px-3 py-2 text-[11px] font-bold text-emerald-700 uppercase tracking-wider border-b border-slate-100">Créances</div>
           {renderTable(creances, 'Aucune créance.')}
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
           <div className="px-3 py-2 text-[11px] font-bold text-rose-700 uppercase tracking-wider border-b border-slate-100">Dettes</div>
           {renderTable(dettes, 'Aucune dette.')}
         </div>
@@ -2242,8 +2242,8 @@ function PartenairesBloquesScreen({ partners }: { partners: Partner[] }) {
     .sort((a, b) => b.balance - b.seuilAutorise - (a.balance - a.seuilAutorise));
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
         <span className="font-extrabold text-slate-900 text-base">Liste des Partenaires Bloqués</span>
         <p className="text-slate-400 text-[11px] mt-1">Partenaires dont le solde dépasse le seuil de crédit autorisé.</p>
       </div>
@@ -2252,27 +2252,27 @@ function PartenairesBloquesScreen({ partners }: { partners: Partner[] }) {
           <SearchInput value={search} onChange={setSearch} placeholder="Code ou raison sociale…" />
         </div>
       </div>
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="p-3">Code</th>
-              <th className="p-3">Raison Sociale</th>
-              <th className="p-3">Catégorie</th>
-              <th className="p-3 text-right">Solde</th>
-              <th className="p-3 text-right">Seuil Autorisé</th>
-              <th className="p-3 text-right">Dépassement</th>
+              <th className="px-2 py-1.5">Code</th>
+              <th className="px-2 py-1.5">Raison Sociale</th>
+              <th className="px-2 py-1.5">Catégorie</th>
+              <th className="px-2 py-1.5 text-right">Solde</th>
+              <th className="px-2 py-1.5 text-right">Seuil Autorisé</th>
+              <th className="px-2 py-1.5 text-right">Dépassement</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {blocked.map((p) => (
               <tr key={p.id} className="bg-rose-50/40">
-                <td className="p-3 font-mono font-bold text-rose-700">{p.code}</td>
-                <td className="p-3 font-medium text-slate-800">{p.raisonSociale}</td>
-                <td className="p-3 text-slate-500">{p.categoryLabel}</td>
-                <td className="p-3 text-right font-mono">{p.balance.toFixed(2)} DZD</td>
-                <td className="p-3 text-right font-mono text-slate-400">{p.seuilAutorise.toFixed(2)} DZD</td>
-                <td className="p-3 text-right font-mono font-bold text-rose-700">{(p.balance - p.seuilAutorise).toFixed(2)} DZD</td>
+                <td className="px-2 py-1.5 font-mono font-bold text-rose-700">{p.code}</td>
+                <td className="px-2 py-1.5 font-medium text-slate-800">{p.raisonSociale}</td>
+                <td className="px-2 py-1.5 text-slate-500">{p.categoryLabel}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{p.balance.toFixed(2)} DZD</td>
+                <td className="px-2 py-1.5 text-right font-mono text-slate-400">{p.seuilAutorise.toFixed(2)} DZD</td>
+                <td className="px-2 py-1.5 text-right font-mono font-bold text-rose-700">{(p.balance - p.seuilAutorise).toFixed(2)} DZD</td>
               </tr>
             ))}
             {blocked.length === 0 && (
@@ -2296,8 +2296,8 @@ function CreancesARecouvrerScreen({ partners }: { partners: Partner[] }) {
   const total = rows.reduce((acc, p) => acc + p.balance, 0);
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <span className="font-extrabold text-slate-900 text-base">Créances à Recouvrer</span>
         <div className="text-xs">
           <span className="text-slate-400 font-medium block text-[11px]">TOTAL À RECOUVRER</span>
@@ -2310,15 +2310,15 @@ function CreancesARecouvrerScreen({ partners }: { partners: Partner[] }) {
         </div>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="p-3">Code</th>
-              <th className="p-3">Raison Sociale</th>
-              <th className="p-3">Catégorie</th>
-              <th className="p-3 text-right">Montant Dû</th>
-              <th className="p-3 text-center">État</th>
+              <th className="px-2 py-1.5">Code</th>
+              <th className="px-2 py-1.5">Raison Sociale</th>
+              <th className="px-2 py-1.5">Catégorie</th>
+              <th className="px-2 py-1.5 text-right">Montant Dû</th>
+              <th className="px-2 py-1.5 text-center">État</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -2326,11 +2326,11 @@ function CreancesARecouvrerScreen({ partners }: { partners: Partner[] }) {
               const overLimit = p.seuilAutorise > 0 && p.balance > p.seuilAutorise;
               return (
                 <tr key={p.id}>
-                  <td className="p-3 font-mono font-bold text-slate-800">{p.code}</td>
-                  <td className="p-3 font-medium text-slate-800">{p.raisonSociale}</td>
-                  <td className="p-3 text-slate-500">{p.categoryLabel}</td>
-                  <td className="p-3 text-right font-mono font-bold">{p.balance.toFixed(2)} DZD</td>
-                  <td className="p-3 text-center">
+                  <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{p.code}</td>
+                  <td className="px-2 py-1.5 font-medium text-slate-800">{p.raisonSociale}</td>
+                  <td className="px-2 py-1.5 text-slate-500">{p.categoryLabel}</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold">{p.balance.toFixed(2)} DZD</td>
+                  <td className="px-2 py-1.5 text-center">
                     {overLimit ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700">Dépassé</span>
                     ) : (
@@ -2383,8 +2383,8 @@ function ChiffreAffairesScreen() {
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.caNetHT)));
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <span className="font-extrabold text-slate-900 text-base">Chiffres d'Affaires</span>
         <select
           value={months}
@@ -2398,46 +2398,46 @@ function ChiffreAffairesScreen() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-center">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs text-center">
           <div className="text-[11px] text-slate-400 font-bold uppercase">CA Net HT (période)</div>
           <div className="text-xl font-black font-mono text-[#0F5B38] mt-1">{totalCA.toFixed(2)} DZD</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-center">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs text-center">
           <div className="text-[11px] text-slate-400 font-bold uppercase">Marge Totale HT</div>
           <div className="text-xl font-black font-mono text-emerald-700 mt-1">{totalMarge.toFixed(2)} DZD</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-center">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs text-center">
           <div className="text-[11px] text-slate-400 font-bold uppercase">Achats Nets HT</div>
           <div className="text-xl font-black font-mono text-slate-700 mt-1">{totalAchats.toFixed(2)} DZD</div>
         </div>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         {loading ? (
           <div className="p-8 text-center text-slate-400 text-xs">Chargement...</div>
         ) : (
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
               <tr>
-                <th className="p-3">Mois</th>
-                <th className="p-3 text-right">Ventes HT</th>
-                <th className="p-3 text-right">Avoirs Vente</th>
-                <th className="p-3 text-right">CA Net HT</th>
-                <th className="p-3 text-right">Achats Nets HT</th>
-                <th className="p-3 text-right">Marge HT</th>
-                <th className="p-3 w-40">Tendance</th>
+                <th className="px-2 py-1.5">Mois</th>
+                <th className="px-2 py-1.5 text-right">Ventes HT</th>
+                <th className="px-2 py-1.5 text-right">Avoirs Vente</th>
+                <th className="px-2 py-1.5 text-right">CA Net HT</th>
+                <th className="px-2 py-1.5 text-right">Achats Nets HT</th>
+                <th className="px-2 py-1.5 text-right">Marge HT</th>
+                <th className="px-2 py-1.5 w-40">Tendance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r) => (
                 <tr key={r.month}>
-                  <td className="p-3 font-mono font-bold text-slate-800">{r.month}</td>
-                  <td className="p-3 text-right font-mono">{r.ventesHT.toFixed(2)}</td>
-                  <td className="p-3 text-right font-mono text-rose-600">{r.avoirsVenteHT.toFixed(2)}</td>
-                  <td className="p-3 text-right font-mono font-bold text-[#0F5B38]">{r.caNetHT.toFixed(2)}</td>
-                  <td className="p-3 text-right font-mono">{r.achatsNetHT.toFixed(2)}</td>
-                  <td className="p-3 text-right font-mono font-semibold text-emerald-700">{r.margeHT.toFixed(2)}</td>
-                  <td className="p-3">
+                  <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{r.month}</td>
+                  <td className="px-2 py-1.5 text-right font-mono">{r.ventesHT.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-rose-600">{r.avoirsVenteHT.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-[#0F5B38]">{r.caNetHT.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono">{r.achatsNetHT.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-emerald-700">{r.margeHT.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">
                     <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className={`h-full ${r.caNetHT >= 0 ? 'bg-[#0F5B38]' : 'bg-rose-500'}`}
@@ -2502,14 +2502,14 @@ function TableauDeBordScreen() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
         <span className="font-extrabold text-slate-900 text-base">Tableau de Bord</span>
         <p className="text-slate-400 text-[11px] mt-1">Vue d'ensemble en temps réel de l'activité.</p>
       </div>
       <div className="grid grid-cols-4 gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+          <div key={c.label} className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
             <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{c.label}</div>
             <div className={`text-lg font-black font-mono mt-1 ${c.color}`}>{c.value}</div>
           </div>
@@ -2541,8 +2541,8 @@ function VentesArticlesScreen() {
   const maxQty = Math.max(1, ...filtered.map((r) => Math.abs(r.quantity)));
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-5xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
         <span className="font-extrabold text-slate-900 text-base">Ventes d'Articles</span>
         <p className="text-slate-400 text-[11px] mt-1">Quantités et chiffre d'affaires net (ventes moins avoirs) par article.</p>
       </div>
@@ -2552,28 +2552,28 @@ function VentesArticlesScreen() {
         </div>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         {loading ? (
           <div className="p-8 text-center text-slate-400 text-xs">Chargement...</div>
         ) : (
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
               <tr>
-                <th className="p-3">Code</th>
-                <th className="p-3">Désignation</th>
-                <th className="p-3 text-right">Qté Vendue (nette)</th>
-                <th className="p-3 text-right">CA HT (net)</th>
-                <th className="p-3 w-40">Répartition</th>
+                <th className="px-2 py-1.5">Code</th>
+                <th className="px-2 py-1.5">Désignation</th>
+                <th className="px-2 py-1.5 text-right">Qté Vendue (nette)</th>
+                <th className="px-2 py-1.5 text-right">CA HT (net)</th>
+                <th className="px-2 py-1.5 w-40">Répartition</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r) => (
                 <tr key={r.articleId}>
-                  <td className="p-3 font-mono font-bold text-slate-900">{r.code}</td>
-                  <td className="p-3 font-medium text-slate-800">{r.designation}</td>
+                  <td className="px-2 py-1.5 font-mono font-bold text-slate-900">{r.code}</td>
+                  <td className="px-2 py-1.5 font-medium text-slate-800">{r.designation}</td>
                   <td className={`p-3 text-right font-mono font-bold ${r.quantity < 0 ? 'text-rose-600' : 'text-slate-800'}`}>{r.quantity}</td>
-                  <td className="p-3 text-right font-mono font-semibold text-[#0F5B38]">{r.totalHT.toFixed(2)}</td>
-                  <td className="p-3">
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-[#0F5B38]">{r.totalHT.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">
                     <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className={`h-full ${r.quantity >= 0 ? 'bg-[#0F5B38]' : 'bg-rose-500'}`}
@@ -2613,8 +2613,8 @@ function EtatsArticlesScreen({ articles }: { articles: Article[] }) {
   }, 0);
 
   return (
-    <div className="flex-1 flex flex-col gap-4 overflow-hidden max-w-6xl mx-auto w-full z-10">
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center">
+    <div className="flex-1 flex flex-col gap-2 overflow-hidden w-full z-10">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center">
         <div>
           <span className="font-extrabold text-slate-900 text-base">Etats des Articles</span>
           <p className="text-slate-400 text-[11px] mt-1">Inventaire complet: stock, réservé, disponible, valorisation.</p>
@@ -2633,18 +2633,18 @@ function EtatsArticlesScreen({ articles }: { articles: Article[] }) {
         className="border border-slate-200 rounded-xl px-4 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F5B38]/30 transition text-xs shadow-xs"
       />
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-auto shadow-xs">
+      <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="p-3">Code</th>
-              <th className="p-3">Désignation</th>
-              <th className="p-3 text-right">P.U.M.P.</th>
-              <th className="p-3 text-right">TVA</th>
-              <th className="p-3 text-center">En Stock</th>
-              <th className="p-3 text-center">Réservé</th>
-              <th className="p-3 text-center">Disponible</th>
-              <th className="p-3 text-right">Valorisation</th>
+              <th className="px-2 py-1.5">Code</th>
+              <th className="px-2 py-1.5">Désignation</th>
+              <th className="px-2 py-1.5 text-right">P.U.M.P.</th>
+              <th className="px-2 py-1.5 text-right">TVA</th>
+              <th className="px-2 py-1.5 text-center">En Stock</th>
+              <th className="px-2 py-1.5 text-center">Réservé</th>
+              <th className="px-2 py-1.5 text-center">Disponible</th>
+              <th className="px-2 py-1.5 text-right">Valorisation</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -2657,18 +2657,18 @@ function EtatsArticlesScreen({ articles }: { articles: Article[] }) {
                   onClick={() => setSelectedArticleId(a.id === selectedArticleId ? null : a.id)}
                   className={`cursor-pointer transition ${selectedArticleId === a.id ? 'bg-[#0F5B38]/5' : 'hover:bg-slate-50'}`}
                 >
-                  <td className="p-3 font-mono font-bold text-slate-900">{a.code}</td>
-                  <td className="p-3 font-medium text-slate-800">{a.designation}</td>
-                  <td className="p-3 text-right font-mono text-slate-400">{a.pump.toFixed(2)}</td>
-                  <td className="p-3 text-right font-mono text-slate-400">{a.tvaRate}%</td>
-                  <td className="p-3 text-center font-mono">{totalStock}</td>
-                  <td className="p-3 text-center font-mono text-amber-600">{totalReserved}</td>
+                  <td className="px-2 py-1.5 font-mono font-bold text-slate-900">{a.code}</td>
+                  <td className="px-2 py-1.5 font-medium text-slate-800">{a.designation}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-slate-400">{a.pump.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-slate-400">{a.tvaRate}%</td>
+                  <td className="px-2 py-1.5 text-center font-mono">{totalStock}</td>
+                  <td className="px-2 py-1.5 text-center font-mono text-amber-600">{totalReserved}</td>
                   <td
                     className={`p-3 text-center font-mono font-bold ${totalStock - totalReserved <= 0 ? 'text-rose-600' : 'text-[#0F5B38]'}`}
                   >
                     {totalStock - totalReserved}
                   </td>
-                  <td className="p-3 text-right font-mono font-semibold">{(totalStock * a.pump).toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold">{(totalStock * a.pump).toFixed(2)}</td>
                 </tr>
               );
             })}
@@ -2729,7 +2729,7 @@ function CommentsPanel({ entityType, entityId }: { entityType: string; entityId:
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+    <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-col gap-3">
       <div className="flex justify-between items-center">
         <span className="font-bold text-slate-900">Commentaires</span>
         <span className="text-slate-400 text-[10px]">{comments.length} note(s)</span>
@@ -4040,21 +4040,21 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 text-[11px]">
                     <tr>
-                      <th className="p-3 w-10 text-center">N°</th>
-                      <th className="p-3 w-32">Dépôt</th>
-                      <th className="p-3 w-28">Code</th>
-                      <th className="p-3">Désignation Produit</th>
-                      <th className="p-3 text-center w-24">Emballage</th>
-                      <th className="p-3 text-center w-20">Qté</th>
-                      <th className="p-3 text-center w-20" title="Unités gratuites: sortent du stock, ne sont pas facturées">
+                      <th className="px-2 py-1.5 w-10 text-center">N°</th>
+                      <th className="px-2 py-1.5 w-32">Dépôt</th>
+                      <th className="px-2 py-1.5 w-28">Code</th>
+                      <th className="px-2 py-1.5">Désignation Produit</th>
+                      <th className="px-2 py-1.5 text-center w-24">Emballage</th>
+                      <th className="px-2 py-1.5 text-center w-20">Qté</th>
+                      <th className="px-2 py-1.5 text-center w-20" title="Unités gratuites: sortent du stock, ne sont pas facturées">
                         UG
                       </th>
-                      <th className="p-3 text-right w-24">P.U.M.P.</th>
-                      <th className="p-3 text-right w-28">{isPurchaseView ? "Prix d'achat" : 'Prix Vente'}</th>
-                      <th className="p-3 text-right w-24">Ristourne</th>
-                      <th className="p-3 text-right w-28">Montant HT</th>
-                      <th className="p-3 text-center w-16">TVA</th>
-                      <th className="p-3 text-center w-12"></th>
+                      <th className="px-2 py-1.5 text-right w-24">P.U.M.P.</th>
+                      <th className="px-2 py-1.5 text-right w-28">{isPurchaseView ? "Prix d'achat" : 'Prix Vente'}</th>
+                      <th className="px-2 py-1.5 text-right w-24">Ristourne</th>
+                      <th className="px-2 py-1.5 text-right w-28">Montant HT</th>
+                      <th className="px-2 py-1.5 text-center w-16">TVA</th>
+                      <th className="px-2 py-1.5 text-center w-12"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -4077,13 +4077,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                     ) : (
                       displayLines.map((line) => (
                         <tr key={line.id} className="hover:bg-slate-50/80 transition">
-                          <td className="p-3 text-center font-mono text-slate-400 font-bold">{line.num}</td>
-                          <td className="p-3 text-slate-500 font-medium">{line.depotLabel}</td>
-                          <td className="p-3 font-mono font-bold text-slate-800">{line.code}</td>
-                          <td className="p-3 font-medium text-slate-900">{line.designation}</td>
+                          <td className="px-2 py-1.5 text-center font-mono text-slate-400 font-bold">{line.num}</td>
+                          <td className="px-2 py-1.5 text-slate-500 font-medium">{line.depotLabel}</td>
+                          <td className="px-2 py-1.5 font-mono font-bold text-slate-800">{line.code}</td>
+                          <td className="px-2 py-1.5 font-medium text-slate-900">{line.designation}</td>
                           {/* Emballage: en colis, la quantité découle du colisage de la fiche
                               article et le champ Qté n'est plus saisissable. */}
-                          <td className="p-3 text-center">
+                          <td className="px-2 py-1.5 text-center">
                             {isReadOnly ? (
                               <span className="text-[11px] text-slate-500">
                                 {line.emballage === 'COLISAGE' ? `${line.nbColis ?? 0} colis` : 'Vrac'}
@@ -4117,7 +4117,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="px-2 py-1.5 text-center">
                             {isReadOnly || line.emballage === 'COLISAGE' ? (
                               <span
                                 className="font-bold font-mono"
@@ -4135,7 +4135,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                               />
                             )}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="px-2 py-1.5 text-center">
                             {isReadOnly ? (
                               line.quantiteBonus > 0 ? (
                                 <span className="font-mono font-bold text-[#0F5B38]">+{line.quantiteBonus}</span>
@@ -4154,13 +4154,13 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                               />
                             )}
                           </td>
-                          <td className="p-3 text-right font-mono text-slate-400">{line.pump.toFixed(2)}</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-slate-400">{line.pump.toFixed(2)}</td>
                           {/*
                             Le prix unitaire doit rester saisissable. Sur un achat il change
                             a chaque facture fournisseur, et c'est lui qui rebase le P.U.M.P:
                             ne pas pouvoir le corriger obligeait a saisir l'achat ailleurs.
                           */}
-                          <td className="p-3 text-right">
+                          <td className="px-2 py-1.5 text-right">
                             {isReadOnly ? (
                               <span className="font-mono font-semibold text-slate-800">{line.prixVente.toFixed(2)}</span>
                             ) : (
@@ -4175,7 +4175,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                               />
                             )}
                           </td>
-                          <td className="p-3 text-right">
+                          <td className="px-2 py-1.5 text-right">
                             {isReadOnly ? (
                               <span className="font-mono text-slate-500">{line.ristourne.toFixed(2)}</span>
                             ) : (
@@ -4190,8 +4190,8 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                               />
                             )}
                           </td>
-                          <td className="p-3 text-right font-mono font-bold text-slate-900">{line.montantHT.toFixed(2)}</td>
-                          <td className="p-3 text-center">
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-900">{line.montantHT.toFixed(2)}</td>
+                          <td className="px-2 py-1.5 text-center">
                             {isReadOnly ? (
                               <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono text-[10px]">{line.tvaRate}%</span>
                             ) : (
@@ -4211,7 +4211,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
                               </select>
                             )}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="px-2 py-1.5 text-center">
                             {!isReadOnly && (
                               <button onClick={() => handleRemoveLine(line.id)} className="text-slate-300 hover:text-rose-600 font-bold p-1 transition">
                                 ✕
@@ -4227,7 +4227,7 @@ export default function App({ onLogout }: { onLogout: () => void }) {
             </div>
 
             {/* TOTALS & SAVE BAR */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex justify-between items-center gap-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex justify-between items-center gap-4">
               <div className="flex items-center gap-8 text-xs">
                 <div>
                   <span className="text-slate-400 font-medium block text-[11px]">TOTAL HT</span>
