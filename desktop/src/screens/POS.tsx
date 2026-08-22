@@ -4,7 +4,7 @@ import { Banknote, CreditCard, Landmark, Minus, Plus, Printer, ReceiptText, Scan
 import { apiRequest } from '../services/apiClient';
 import { CompanySettings, printHtml, ticketHtml } from '../services/print';
 import { Badge, Select, ToastHost, money, useToasts } from '../components/ui';
-import type { Article, Depot, Partner } from '../ui/App';
+import { Peremption, type Article, type Depot, type Partner } from '../ui/App';
 
 /**
  * Caisse — point of sale for counter (retail) sales.
@@ -358,6 +358,16 @@ export function POSScreen({
                     </div>
                   </div>
                   <div className="text-[11px] font-semibold text-slate-800 leading-snug line-clamp-2 min-h-[2.1em]">{a.designation}</div>
+                  {/*
+                    PPA et péremption sur la vignette: le caissier vend face au
+                    client, sans le temps d'ouvrir une fiche. Le PPA est le prix
+                    public imprimé sur la boîte — c'est celui que le client lit,
+                    et un écart avec le prix affiché se discute au comptoir.
+                  */}
+                  <div className="flex items-center justify-between gap-1 text-[9px] font-mono text-slate-400 min-h-[1.1em]">
+                    <span>{a.ppa ? `PPA ${a.ppa.toFixed(2)}` : ''}</span>
+                    <Peremption lots={a.lots} />
+                  </div>
                   <div className="flex items-end justify-between mt-auto">
                     <span className="font-mono text-[9px] text-slate-400">{a.code}</span>
                     <span className="font-mono font-bold text-[13px] text-[#0F5B38]">{money(priceFor(a) * (1 + a.tvaRate / 100))}</span>

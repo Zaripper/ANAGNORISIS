@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { apiRequest } from '../services/apiClient';
 import { Badge, Button, Card, DataTable, Screen, SearchInput, Select, StatusBadge, ToastHost, dateShort, money, num, useToasts } from '../components/ui';
 import { describeError } from './ReferenceData';
-import type { Article, Depot, DocumentRow, Partner } from '../ui/App';
+import { useListeClavier, type Article, type Depot, type DocumentRow, type Partner } from '../ui/App';
 
 /**
  * Commandes fournisseurs — purchase orders.
@@ -10,6 +10,13 @@ import type { Article, Depot, DocumentRow, Partner } from '../ui/App';
  * A commande has no stock or ledger effect of its own; it is a promise to buy.
  * "Réceptionner" turns it into a real, validated ACHAT (stock in, P.U.M.P
  * recalculated, supplier balance updated) in one action on the server.
+ *
+ * ÉCRAN NON RACCORDÉ. Il a été retiré des menus et plus rien ne l'importe: le
+ * cycle commande → réception passe aujourd'hui par l'éditeur de documents
+ * commun. Le fichier est gardé parce que le serveur sait toujours réceptionner
+ * une commande, mais tant qu'il n'apparaît pas dans `navigation.ts`, personne
+ * ne peut l'ouvrir — et le corriger n'a aucun effet visible. À raccorder ou à
+ * supprimer, pas à entretenir en l'état.
  */
 
 interface OrderLine {
@@ -53,6 +60,16 @@ export function CommandesScreen({
     if (q.length < 2) return [];
     return articles.filter((a) => a.code.toLowerCase().includes(q) || a.designation.toLowerCase().includes(q)).slice(0, 6);
   }, [search, articles]);
+
+  /**
+   * Clavier sur les suggestions: fleches pour parcourir, Entree pour ajouter la
+   * ligne, Echap pour abandonner la recherche. Ici la liste n'est pas un modal
+   * mais un menu sous le champ; quand il est vide le crochet ne fait rien, ce
+   * qui evite de capter les touches du reste de l'ecran.
+   */
+  const { index, setIndex, refLigne } = useListeClavier(matches, (a) => addLine(a), () => setSearch(''), {
+    fermerApresChoix: false
+  });
 
   function addLine(a: Article) {
     if (lines.some((l) => l.articleId === a.id)) return setSearch('');
@@ -141,20 +158,40 @@ export function CommandesScreen({
               <SearchInput value={search} onChange={setSearch} placeholder="Ajouter un article (code ou désignation)…" />
               {matches.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden">
-                  {matches.map((a) => (
+                  {/*
+                    Memes informations que dans les autres selecteurs: stock, UG
+                    autorisee, peremption, PPA et cout d'achat. Le commercial ne
+                    doit pas avoir a quitter le bon pour savoir ce qu'il commande.
+                  */}
+                  {matches.map((a, i) => (
                     <div
                       key={a.id}
+                      ref={i === index ? refLigne : undefined}
+                      onMouseEnter={() => setIndex(i)}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         addLine(a);
                       }}
-                      className="px-3 py-2 cursor-pointer hover:bg-[#0F5B38]/5 text-xs flex justify-between"
+                      className={`px-3 py-1.5 cursor-pointer text-xs ${i === index ? 'bg-[#0F5B38]/10' : 'hover:bg-[#0F5B38]/5'}`}
                     >
-                      <span>
-                        <span className="font-mono font-bold text-[#0F5B38] mr-2">{a.code}</span>
-                        {a.designation}
-                      </span>
-                      <span className="font-mono text-slate-400">PUMP {money(a.pump)}</span>
+                      <div className="flex justify-between gap-3">
+                        <span className="truncate">
+                          <span className="font-mono font-bold text-[#0F5B38] mr-2">{a.code}</span>
+                          {a.designation}
+                        </span>
+                        <span className={`font-mono shrink-0 ${a.stockGlobal > 0 ? 'text-slate-500' : 'text-rose-600'}`}>
+                          Stock {a.stockGlobal}
+                        </span>
+                      </div>
+                      <div className="flex gap-3 text-[10px] text-slate-400 mt-0.5">
+                        <span>UG max {a.tauxUGAutorise ? `${a.tauxUGAutorise}%` : '—'}</span>
+                        <span>
+                          Péremption{' '}
+                          {a.lots?.[0] ? new Date(a.lots[0].datePeremption).toLocaleDateString('fr-FR') : '—'}
+                        </span>
+                        <span>PPA {a.ppa ? money(a.ppa) : '—'}</span>
+                        <span>Coût {money(a.pump)}</span>
+                      </div>
                     </div>
                   ))}
                 </div>

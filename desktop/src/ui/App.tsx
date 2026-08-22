@@ -463,11 +463,7 @@ function ArticleSelectModal({
                 <tr>
                   <th className="px-2 py-1.5">Code</th>
                   <th className="px-2 py-1.5">Désignation</th>
-                  <th className="px-2 py-1.5 text-center">Stock</th>
-                  <th className="px-2 py-1.5 text-center" title="Taux d'unités gratuites autorisé">UG max</th>
-                  <th className="px-2 py-1.5 text-center">Péremption</th>
-                  <th className="px-2 py-1.5 text-right">PPA</th>
-                  <th className="px-2 py-1.5 text-right">Coût d'achat</th>
+                  <EnTetesArticle />
                   <th className="px-2 py-1.5 text-right">Prix HT</th>
                 </tr>
               </thead>
@@ -485,19 +481,7 @@ function ArticleSelectModal({
                   >
                     <td className="px-2 py-1.5 font-mono font-bold text-slate-900">{art.code}</td>
                     <td className="px-2 py-1.5 font-medium text-slate-800">{art.designation}</td>
-                    <td className="px-2 py-1.5 text-center">
-                      <span className={`font-mono font-bold ${art.stockGlobal > 0 ? 'text-slate-700' : 'text-rose-600'}`}>
-                        {art.stockGlobal}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 text-center font-mono text-slate-500">
-                      {art.tauxUGAutorise ? `${art.tauxUGAutorise}%` : '—'}
-                    </td>
-                    <td className="px-2 py-1.5 text-center">
-                      <Peremption lots={art.lots} />
-                    </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-slate-500">{art.ppa ? art.ppa.toFixed(2) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-slate-500">{art.pump.toFixed(2)}</td>
+                    <CellulesArticle art={art} />
                     <td className="px-2 py-1.5 text-right font-mono font-bold text-[#0F5B38]">{art.priceHT.toFixed(2)}</td>
                     <td className="px-2 py-1.5 text-center hidden">
                       <span
@@ -555,6 +539,21 @@ function ReserveArticleModal({
     setQuantities({});
   }
 
+  /**
+   * Clavier sur la liste de recherche uniquement.
+   *
+   * Une fois l'article choisi, l'ecran passe a la saisie des quantites par
+   * depot: Entree y sert a valider la reservation, pas a re-selectionner une
+   * ligne. Le crochet est donc desactive dans ce second temps, sinon Entree
+   * ferait les deux.
+   */
+  const { index, setIndex, refLigne } = useListeClavier(filteredArticles, pickArticle, onClose, {
+    // Des qu'un article est choisi, le clavier appartient a l'etape des
+    // quantites: Entree y valide la reservation et Echap revient a la liste.
+    actif: !selectedArticle,
+    fermerApresChoix: false
+  });
+
   function handleConfirm() {
     if (!selectedArticle) return;
     const toReserve = Object.fromEntries(Object.entries(quantities).filter(([, qty]) => qty > 0));
@@ -565,9 +564,26 @@ function ReserveArticleModal({
 
   const totalAReserver = Object.values(quantities).reduce((sum, q) => sum + (q || 0), 0);
 
+  // Second temps: Entree enregistre la reservation, Echap revient a la liste.
+  useEffect(() => {
+    if (!selectedArticle) return;
+    function surTouche(e: KeyboardEvent) {
+      if (e.key === 'Enter' && totalAReserver > 0) {
+        e.preventDefault();
+        handleConfirm();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedArticle(null);
+      }
+    }
+    window.addEventListener('keydown', surTouche);
+    return () => window.removeEventListener('keydown', surTouche);
+  });
+
   return (
     <div className="fixed inset-0 bg-slate-900/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] text-xs">
+      {/* Plus large: cinq colonnes d'information ne tiennent pas dans une boite etroite. */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden flex flex-col max-h-[85vh] text-xs">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
           <div>
             <h3 className="font-bold text-slate-900 text-sm">Ajouter des articles au bon de préparation</h3>
@@ -594,20 +610,26 @@ function ReserveArticleModal({
                   <tr>
                     <th className="px-2 py-1.5">Code</th>
                     <th className="px-2 py-1.5">Désignation</th>
-                    <th className="px-2 py-1.5 text-center">Stock Total</th>
+                    <EnTetesArticle />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredArticles.map((art) => (
-                    <tr key={art.id} onClick={() => pickArticle(art)} className="hover:bg-[#0F5B38]/5 cursor-pointer transition">
+                  {filteredArticles.map((art, i) => (
+                    <tr
+                      key={art.id}
+                      ref={i === index ? refLigne : undefined}
+                      onMouseEnter={() => setIndex(i)}
+                      onClick={() => pickArticle(art)}
+                      className={`cursor-pointer transition ${i === index ? 'bg-[#0F5B38]/10' : 'hover:bg-[#0F5B38]/5'}`}
+                    >
                       <td className="px-2 py-1.5 font-mono font-bold text-slate-900">{art.code}</td>
                       <td className="px-2 py-1.5 font-medium text-slate-800">{art.designation}</td>
-                      <td className="px-2 py-1.5 text-center font-mono">{art.stockGlobal}</td>
+                      <CellulesArticle art={art} />
                     </tr>
                   ))}
                   {filteredArticles.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="p-6 text-center text-slate-400">
+                      <td colSpan={7} className="p-6 text-center text-slate-400">
                         Aucun article trouvé.
                       </td>
                     </tr>
@@ -989,7 +1011,7 @@ function Info({
  * compte au moment de choisir l'article. Un article non suivi par lot n'en a
  * pas: on l'affiche franchement plutôt que d'inventer une date.
  */
-function Peremption({ lots }: { lots?: { numeroLot: string; datePeremption: string }[] }) {
+export function Peremption({ lots }: { lots?: { numeroLot: string; datePeremption: string }[] }) {
   const lot = lots?.[0];
   if (!lot) return <span className="text-slate-300">—</span>;
 
@@ -1012,7 +1034,32 @@ function Peremption({ lots }: { lots?: { numeroLot: string; datePeremption: stri
  * L'index se remet à zéro quand la liste change (une frappe dans la recherche),
  * sinon la sélection pointerait une ligne qui a disparu.
  */
-function useListeClavier<T>(items: T[], onChoisir: (item: T) => void, onFermer: () => void) {
+export interface OptionsListeClavier {
+  /**
+   * Le clavier est-il a cette liste en ce moment ?
+   *
+   * Un selecteur en deux temps (choisir l'article, puis saisir les quantites)
+   * a deux proprietaires de touches successifs. Passer une liste vide ne suffit
+   * pas a ceder la main: l'ecouteur reste pose et avale Echap, si bien que
+   * revenir a la liste refermait tout. Le drapeau retire vraiment l'ecouteur.
+   */
+  actif?: boolean;
+  /**
+   * Faut-il refermer apres avoir choisi ?
+   *
+   * Vrai pour un selecteur en une etape. Faux quand choisir n'est que la
+   * premiere moitie du geste: y refermer annulerait le travail au moment ou il
+   * commence.
+   */
+  fermerApresChoix?: boolean;
+}
+
+export function useListeClavier<T>(
+  items: T[],
+  onChoisir: (item: T) => void,
+  onFermer: () => void,
+  { actif = true, fermerApresChoix = true }: OptionsListeClavier = {}
+) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -1020,6 +1067,7 @@ function useListeClavier<T>(items: T[], onChoisir: (item: T) => void, onFermer: 
   }, [items.length]);
 
   useEffect(() => {
+    if (!actif) return;
     function surTouche(e: KeyboardEvent) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -1041,8 +1089,8 @@ function useListeClavier<T>(items: T[], onChoisir: (item: T) => void, onFermer: 
           // La fermeture appartient au hook: si elle dépendait de l'appelant,
           // il suffirait qu'un seul oublie de la faire pour que le clavier
           // sélectionne sans refermer — ce qui donne l'impression que la touche
-          // Entrée ne marche pas.
-          onFermer();
+          // Entrée ne marche pas. Sauf sélecteur en deux temps, voir ci-dessus.
+          if (fermerApresChoix) onFermer();
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -1051,7 +1099,7 @@ function useListeClavier<T>(items: T[], onChoisir: (item: T) => void, onFermer: 
     }
     window.addEventListener('keydown', surTouche);
     return () => window.removeEventListener('keydown', surTouche);
-  }, [items, index, onChoisir, onFermer]);
+  }, [items, index, onChoisir, onFermer, actif, fermerApresChoix]);
 
   // Garde la ligne surlignée dans le champ de vision quand on parcourt au clavier.
   const refLigne = useCallback((n: HTMLElement | null) => {
@@ -1059,6 +1107,50 @@ function useListeClavier<T>(items: T[], onChoisir: (item: T) => void, onFermer: 
   }, []);
 
   return { index, setIndex, refLigne };
+}
+
+/**
+ * En-têtes des informations produit, communes à TOUS les sélecteurs.
+ *
+ * Elles vivaient recopiées dans un seul des quatre sélecteurs, et c'est
+ * exactement pour ça que « Réserver des articles » n'affichait toujours que
+ * code / désignation / stock alors que la demande visait « n'importe où ».
+ * Une seule définition, utilisée partout: la prochaine colonne s'ajoutera
+ * d'un seul coup pour tout le monde.
+ */
+export function EnTetesArticle() {
+  return (
+    <>
+      <th className="px-2 py-1.5 text-center">Stock</th>
+      <th className="px-2 py-1.5 text-center" title="Taux d'unités gratuites autorisé">
+        UG max
+      </th>
+      <th className="px-2 py-1.5 text-center">Péremption</th>
+      <th className="px-2 py-1.5 text-right">PPA</th>
+      <th className="px-2 py-1.5 text-right">Coût d&apos;achat</th>
+    </>
+  );
+}
+
+/** Les cinq cellules correspondantes, dans le même ordre. */
+export function CellulesArticle({ art }: { art: Article }) {
+  return (
+    <>
+      <td className="px-2 py-1.5 text-center">
+        <span className={`font-mono font-bold ${art.stockGlobal > 0 ? 'text-slate-700' : 'text-rose-600'}`}>
+          {art.stockGlobal}
+        </span>
+      </td>
+      <td className="px-2 py-1.5 text-center font-mono text-slate-500">
+        {art.tauxUGAutorise ? `${art.tauxUGAutorise}%` : '—'}
+      </td>
+      <td className="px-2 py-1.5 text-center">
+        <Peremption lots={art.lots} />
+      </td>
+      <td className="px-2 py-1.5 text-right font-mono text-slate-500">{art.ppa ? art.ppa.toFixed(2) : '—'}</td>
+      <td className="px-2 py-1.5 text-right font-mono text-slate-500">{art.pump.toFixed(2)}</td>
+    </>
+  );
 }
 
 interface SimpleMovementLine {
